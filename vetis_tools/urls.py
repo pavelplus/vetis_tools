@@ -21,6 +21,7 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('main.urls')),
+    path('api/', include('vetis_api.urls')),
 
     # Django auth
     # https://docs.djangoproject.com/en/5.2/topics/auth/default/#module-django.contrib.auth.views
