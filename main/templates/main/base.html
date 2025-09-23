@@ -17,57 +17,56 @@
   </head>
 
   <body>
-    <div class="container-md">
-      {% block navigation %}
-        <nav class="navbar navbar-expand-lg bg-body-tertiary">
-          <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'main:index' %}">VETIS-TOOLS</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
-            <div class="collapse navbar-collapse" id="navbarSupportedContent">
-              <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                  <a class="nav-link" href="#">СКЛАД</a>
+    {% block navigation %}
+      <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container-md">
+          <a class="navbar-brand" href="{% url 'main:index' %}">VETIS-TOOLS</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
+          <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+              <li class="nav-item">
+                <a class="nav-link" href="#">СКЛАД</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#">ВЫПУСК</a>
+              </li>
+            </ul>
+            <ul class="navbar-nav mb-2 mb-lg-0">
+              {% if user.is_authenticated %}
+                <li class="nav-item dropdown">
+                  <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ user.get_display_name }}</a>
+                  <ul class="dropdown-menu">
+                    <li>
+                      <a class="dropdown-item" href="#">Настройки</a>
+                    </li>
+                    {% if user.is_staff %}
+                      <li>
+                        <a class="dropdown-item" href="{% url 'admin:index' %}">Админка</a>
+                      </li>
+                    {% endif %}
+                    <li>
+                      <hr class="dropdown-divider" />
+                    </li>
+                    <li>
+                      <form action="{% url 'logout' %}" method="post" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" value="logout" class="dropdown-item">Выйти</button>
+                      </form>
+                    </li>
+                  </ul>
                 </li>
+              {% else %}
                 <li class="nav-item">
-                  <a class="nav-link" href="#">ВЫПУСК</a>
+                  <a class="nav-link" href="{% url 'login' %}">ВОЙТИ</a>
                 </li>
-                <li class="nav-item">
-                  <a class="nav-link" href="{% url 'admin:index' %}">АДМИНКА</a>
-                </li>
-              </ul>
-              <ul class="navbar-nav mb-2 mb-lg-0">
-                {% if user.is_authenticated %}
-                  <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ user.get_username }}</a>
-                    <ul class="dropdown-menu">
-                      <li>
-                        <a class="dropdown-item" href="#">Настройки</a>
-                      </li>
-                      <li>
-                        <a class="dropdown-item" href="#">Another action</a>
-                      </li>
-                      <li>
-                        <hr class="dropdown-divider" />
-                      </li>
-                      <li>
-                        <form action="{% url 'logout' %}" method="post" style="display: inline;">
-                          {% csrf_token %}
-                          <button type="submit" value="logout" class="dropdown-item">Выйти</button>
-                        </form>
-                      </li>
-                    </ul>
-                  </li>
-                {% else %}
-                  <li class="nav-item">
-                    <a class="nav-link" href="{% url 'login' %}">ВОЙТИ</a>
-                  </li>
-                {% endif %}
-              </ul>
-            </div>
+              {% endif %}
+            </ul>
           </div>
-        </nav>
-      {% endblock %}
+        </div>
+      </nav>
+    {% endblock %}
 
+    <div class="container-md">
       {% block content %}
         <!-- default content text (typically empty) -->
       {% endblock %}
