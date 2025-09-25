@@ -3,6 +3,7 @@ from django.db import models
 
 class VetisCredentials(models.Model):
     name = models.CharField(null=False, blank=False, max_length=100, verbose_name='название')
+    is_productive = models.BooleanField(default=False, verbose_name='продуктивный')
     login = models.CharField(null=False, blank=False, verbose_name='логин')
     password = models.CharField(null=False, blank=False, verbose_name='пароль')
     api_key = models.CharField(null=False, blank=False, verbose_name='API key')

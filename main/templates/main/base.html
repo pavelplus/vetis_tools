@@ -30,6 +30,9 @@
               <li class="nav-item">
                 <a class="nav-link" href="#">ВЫПУСК</a>
               </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'vetis_api:apitest' %}">API</a>
+              </li>
             </ul>
             <ul class="navbar-nav mb-2 mb-lg-0">
               {% if user.is_authenticated %}

@@ -1,0 +1,17 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:bs="http://api.vetrf.ru/schema/cdm/base"
+    xmlns:dt="http://api.vetrf.ru/schema/cdm/dictionary/v2"
+    xmlns:ws="http://api.vetrf.ru/schema/cdm/registry/ws-definitions/v2">
+    <soapenv:Header />
+    <soapenv:Body>
+        <ws:getProductItemListRequest>
+            <bs:listOptions>
+                <bs:count>{{ vetis_request.list_count }}</bs:count>
+                <bs:offset>{{ vetis_request.list_offset }}</bs:offset>
+            </bs:listOptions>
+            <dt:businessEntity>
+                <bs:guid>{{ vetis_request.business_entity_guid }}</bs:guid>
+            </dt:businessEntity>
+        </ws:getProductItemListRequest>
+    </soapenv:Body>
+</soapenv:Envelope>
