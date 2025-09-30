@@ -70,6 +70,14 @@
     {% endblock %}
 
     <div class="container-md">
+      {% block messages %}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert {{ message.tags }} mt-3" role="alert">{{ message | safe }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endblock %}
+
       {% block content %}
         <!-- default content text (typically empty) -->
       {% endblock %}

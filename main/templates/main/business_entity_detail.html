@@ -1,0 +1,10 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+  {% include 'main/includes/business_entity_card.html' %}
+  <form method="post" action="{% url 'main:vetis_task' %}">
+    {% csrf_token %}
+    <input type="hidden" name="business_entity_id" value="{{ business_entity.id }}" />
+    <button type="submit" name="vetis_task" value="reload_enterprises" class="btn btn-primary" onclick="return window.confirm('Вы уверены?')">Обновить предприятия</button>
+  </form>
+{% endblock %}

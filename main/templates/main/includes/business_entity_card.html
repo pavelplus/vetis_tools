@@ -1,0 +1,21 @@
+<div class="card my-3">
+  <div class="card-header d-flex justify-content-between">
+    <div><a href="{% url 'main:business_entity_detail' business_entity.id %}">{{ business_entity.name }}</a></div>
+    <div>{{ business_entity.get_type_display }}</div>
+  </div>
+  <ul class="list-group list-group-flush">
+    {% if business_entity.inn %}
+      <li class="list-group-item">
+        <span class="badge bg-secondary">ИНН</span> {{ business_entity.inn }}
+      </li>
+    {% endif %}
+    {% if business_entity.address %}
+      <li class="list-group-item">
+        <span class="badge bg-secondary">Адрес</span> {{ business_entity.address }}
+      </li>
+    {% endif %}
+  </ul>
+  <div class="card-footer text-body-secondary">
+    <small>GUID: {{ business_entity.guid }}<br />UUID: {{ business_entity.uuid }}</small>
+  </div>
+</div>

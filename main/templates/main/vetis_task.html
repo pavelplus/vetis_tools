@@ -1,0 +1,7 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+  {% if message %}
+    <div class="alert alert-warning mt-3" role="alert">{{ message }}</div>
+  {% endif %}
+{% endblock %}

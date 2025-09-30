@@ -1,0 +1,11 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+  <h3 class="mt-3">Песочница Ветис.API</h3>
+  {% for record in history_records %}
+    <div class="card">
+      <div class="card-header">{{ record.datetime }}</div>
+      <div class="card-body">{{ record.soap_request | safe }}</div>
+    </div>
+  {% endfor %}
+{% endblock %}
