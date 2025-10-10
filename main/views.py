@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.template.response import TemplateResponse
 from django.contrib import messages
 
-from vetis_api.models import BusinessEntity
+from vetis_api.models import BusinessEntity, Enterprise
 from vetis_api.tasks import reload_enterprises
 
 
@@ -21,6 +21,7 @@ def business_entities(request):
 
 def business_entity_detail(request, id):
     business_entity = get_object_or_404(BusinessEntity, pk=id)
+    enterprises = business_entity.enterprise_set
     context = {
         'business_entity': business_entity,
     }
@@ -30,10 +31,11 @@ def business_entity_detail(request, id):
 def vetis_task(request):
     vetis_task = None
     if request.method == 'POST':
-        vetis_task = request.POST['vetis_task']
+        vetis_task = request.POST.get('vetis_task')
+
         if vetis_task == 'reload_enterprises':
-            business_entity_id = int(request.POST['business_entity_id'])
-            result = reload_enterprises(14)
+            business_entity_id = int(request.POST.get('business_entity_id'))
+            result = reload_enterprises(business_entity_id)
             if result['result'] == 'success':
                 messages.add_message(request, messages.INFO, 'Список предприятий успешно обновлен.')
                 return redirect(reverse('main:business_entity_detail', kwargs={'id': business_entity_id}))
@@ -41,6 +43,6 @@ def vetis_task(request):
                 messages.add_message(request, messages.ERROR, result['message'])
                 return redirect(reverse('main:vetis_task'))
         
-    # Unknown task    
+    # TODO: display task info
     messages.add_message(request, messages.ERROR, 'Ошибка! Задача не обработана!')
     return TemplateResponse(request, 'main/vetis_task.html', {})

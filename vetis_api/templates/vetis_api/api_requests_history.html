@@ -1,11 +1,28 @@
 {% extends 'main/base.html' %}
 
 {% block content %}
-  <h3 class="mt-3">Песочница Ветис.API</h3>
-  {% for record in history_records %}
-    <div class="card">
-      <div class="card-header">{{ record.datetime }}</div>
-      <div class="card-body">{{ record.soap_request | safe }}</div>
+  <h3 class="mt-3">История запросов Ветис</h3>
+  {% for record in requests_history %}
+    <div class="card my-3">
+      <div class="card-header">
+        <span class="text-primary">{{ record.datetime|date:'Y-m-d H:i:s' }}:</span>
+        <a href="{% url 'vetis_api:api_requests_history_detail' record.id %}">{{ record.soap_action }}</a>
+        <span class="badge bg-secondary">{{ record.response_status_code }}</span>
+      </div>
+      <div class="card-body">
+        <h5>Запрос</h5>
+        {{ record.soap_request|truncatechars:1000 }}
+        <hr />
+        <h5>Ответ</h5>
+        {{ record.response_body|truncatechars:1000 }}
+      </div>
+      {% if record.comment %}
+        <div class="card-footer">
+          <small>{{ record.comment }}</small>
+        </div>
+      {% endif %}
     </div>
+  {% empty %}
+    <div class="alert alert-info mt-3" role="alert">Нет записей...</div>
   {% endfor %}
 {% endblock %}

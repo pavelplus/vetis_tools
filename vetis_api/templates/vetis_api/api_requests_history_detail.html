@@ -1,0 +1,24 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+  <h3 class="mt-3">Запись истории запросов Ветис</h3>
+  <div class="card my-3">
+    <div class="card-header">
+      <span class="text-primary">{{ record.datetime|date:'Y-m-d H:i:s' }}:</span>
+      {{ record.soap_action }}
+      <span class="badge bg-secondary">{{ record.response_status_code }}</span>
+    </div>
+    <div class="card-body">
+      <h5>Запрос</h5>
+      {{ record.soap_request }}
+      <hr />
+      <h5>Ответ</h5>
+      {{ record.response_body }}
+    </div>
+    {% if record.comment %}
+      <div class="card-footer">
+        <small>{{ record.comment }}</small>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

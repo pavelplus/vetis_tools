@@ -9,15 +9,3 @@ NAMESPACES = {
     'apl': 'http://api.vetrf.ru/schema/cdm/application',
     'vd': 'http://api.vetrf.ru/schema/cdm/mercury/vet-document/v2',
 }
-
-# PROD
-# ENDPOINTS = {
-#     'ProductService': 'https://api.vetrf.ru/platform/services/2.1/ProductService',
-#     'EnterpriseService': 'https://api.vetrf.ru/platform/services/2.1/EnterpriseService',
-# }
-
-# TEST
-ENDPOINTS = {
-    'ProductService': 'https://api2.vetrf.ru:8002/platform/services/2.1/ProductService',
-    'EnterpriseService': 'https://api2.vetrf.ru:8002/platform/services/2.1/EnterpriseService',
-}

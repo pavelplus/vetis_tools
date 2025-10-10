@@ -1,10 +1,29 @@
 {% extends 'main/base.html' %}
 
 {% block content %}
+  <h3 class="mt-3">Хозяйствующий субъект</h3>
   {% include 'main/includes/business_entity_card.html' %}
-  <form method="post" action="{% url 'main:vetis_task' %}">
-    {% csrf_token %}
-    <input type="hidden" name="business_entity_id" value="{{ business_entity.id }}" />
-    <button type="submit" name="vetis_task" value="reload_enterprises" class="btn btn-primary" onclick="return window.confirm('Вы уверены?')">Обновить предприятия</button>
-  </form>
+  <div class="d-flex justify-content-end">
+    <form method="post" action="{% url 'main:vetis_task' %}">
+      {% csrf_token %}
+      <input type="hidden" name="business_entity_id" value="{{ business_entity.id }}" />
+      <button type="submit" name="vetis_task" value="reload_enterprises" class="btn btn-primary" onclick="return window.confirm('Будут загружены предприятия с сайта Ветис. Вы уверены?')">Обновить предприятия</button>
+    </form>
+  </div>
+  {% for enterprise in business_entity.enterprise_set.all %}
+    {% if forloop.first %}
+      <h5 class="mt-3">Предприятия хозяйствующего субъекта</h5>
+    {% endif %}
+    <div class="card my-3">
+      <div class="card-header d-flex justify-content-between">
+        <div class="{% if not enterprise.is_active %}text-decoration-line-through{% endif %}">{{ enterprise.name }}</div>
+        <div>{{ enterprise.get_type_display }}</div>
+      </div>
+      <div class="card-body">{{ enterprise.address }}</div>
+      <div class="card-footer text-body-secondary">
+        {% if enterprise.number_list %}<small>Номера: {{ enterprise.number_list }}</small><br />{% endif %}
+        <small>GUID: {{ enterprise.guid }}<br />UUID: {{ enterprise.uuid }}</small>
+      </div>
+    </div>
+  {% endfor %}
 {% endblock %}

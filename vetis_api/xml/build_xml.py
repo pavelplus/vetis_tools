@@ -1,7 +1,5 @@
 from django.template.loader import render_to_string
 
-from .settings import ENDPOINTS
-
 
 """ def _ns(ns: str, name: str) -> str:
     return f'{{{NAMESPACES[ns]}}}{name}'
@@ -12,7 +10,7 @@ def _register_namespaces() -> None:
         ET.register_namespace(prefix, uri) """
 
 class AbstractRequest:
-    endpoint = None
+    endpoint_name = None
     soap_action = None
 
     def __init__():
@@ -24,7 +22,7 @@ class AbstractRequest:
 
 class ProductItemListRequest(AbstractRequest):
 
-    endpoint = ENDPOINTS['ProductService']
+    endpoint_name = 'ProductService'
     soap_action = 'GetProductItemList'
 
     def __init__(self, business_entity_guid: str, list_count: int = 1000, list_offset: int = 0):
@@ -41,7 +39,7 @@ class ProductItemListRequest(AbstractRequest):
 
 class BusinessEntityByGuidRequest(AbstractRequest):
 
-    endpoint = ENDPOINTS['EnterpriseService']
+    endpoint_name = 'EnterpriseService'
     soap_action = 'GetBusinessEntityByGuid'
 
     def __init__(self, business_entity_guid: str):
@@ -56,7 +54,7 @@ class BusinessEntityByGuidRequest(AbstractRequest):
 
 class ActivityLocationList(AbstractRequest):
 
-    endpoint = ENDPOINTS['EnterpriseService']
+    endpoint_name = 'EnterpriseService'
     soap_action = 'GetActivityLocationList'
 
     def __init__(self, business_entity_guid: str, list_count: int = 1000, list_offset: int = 0):

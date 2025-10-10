@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'django_bootstrap5',
+    'django_celery_results',
 
     'main',
     'vetis_api',
@@ -148,3 +149,11 @@ AUTH_USER_MODEL = "main.User"
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'main:index'
 LOGOUT_REDIRECT_URL = 'main:index'
+
+# Celery
+
+CELERY_BROKER_URL = 'pyamqp://192.168.101.242//'  # guest!
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_TIMEZONE = 'Europe/Moscow'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_WORKER_POOL = 'solo'  # SINGLE THREAD! Default 'prefork' doesn't work under win.
