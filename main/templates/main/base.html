@@ -27,7 +27,7 @@
           <div class="collapse navbar-collapse" id="navbarSupportedContent">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
               <li class="nav-item">
-                <a class="nav-link" href="#">СКЛАД</a>
+                <a class="nav-link" href="{% url 'main:stock_entries' %}">СКЛАД</a>
               </li>
               <li class="nav-item">
                 <a class="nav-link" href="#">ВЫПУСК</a>
@@ -36,10 +36,10 @@
                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">СПРАВОЧНИКИ</a>
                 <ul class="dropdown-menu">
                   <li>
-                    <a class="dropdown-item" href="{% url 'vetis_api:apitest' %}">Хозяйствующие субъекты</a>
+                    <a class="dropdown-item" href="{% url 'main:business_entities' %}">Хозяйствующие субъекты</a>
                   </li>
                   <li>
-                    <a class="dropdown-item" href="{% url 'vetis_api:api_requests_history' %}">История запросов</a>
+                    <a class="dropdown-item" href="{% url 'main:product_items' %}">Продукция</a>
                   </li>
                 </ul>
               </li>
@@ -47,10 +47,7 @@
                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">API</a>
                 <ul class="dropdown-menu">
                   <li>
-                    <a class="dropdown-item" href="{% url 'vetis_api:apitest' %}">Песочница</a>
-                  </li>
-                  <li>
-                    <hr class="dropdown-divider" />
+                    <a class="dropdown-item" href="{% url 'main:vetis_task' %}">Задачи</a>
                   </li>
                   <li>
                     <a class="dropdown-item" href="{% url 'vetis_api:api_requests_history' %}">История запросов</a>
@@ -64,7 +61,7 @@
                   <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ user.get_display_name }}</a>
                   <ul class="dropdown-menu">
                     <li>
-                      <a class="dropdown-item" href="#">Настройки</a>
+                      <a class="dropdown-item" href="{% url 'main:select_workspace' %}">Выбрать подключение</a>
                     </li>
                     {% if user.is_staff %}
                       <li>
@@ -93,11 +90,28 @@
       </nav>
     {% endblock %}
 
+    {% block workspace%}
+      <div class="bg-body-secondary">
+        <div class="container-md text-center text-truncate">
+          <a class="link-info link-underline link-underline-opacity-0 link-opacity-50 link-underline-opacity-100-hover link-opacity-100-hover" style="font-size: 80%;" href="{% url 'main:select_workspace' %}">
+            {% if request.session.workspace_name %}
+              {{ request.session.workspace_name }}
+            {% else %}
+              ВЫБРАТЬ ПОДКЛЮЧЕНИЕ
+            {% endif %}
+          </a>
+        </div>
+      </div>
+    {% endblock %}
+
     <div class="container-md">
       {% block messages %}
         {% if messages %}
           {% for message in messages %}
-            <div class="alert {{ message.tags }} mt-3" role="alert">{{ message }}</div>
+            <div class="alert {{ message.tags }} mt-3 alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" label="Закрыть"></button>
+            </div>
           {% endfor %}
         {% endif %}
       {% endblock %}

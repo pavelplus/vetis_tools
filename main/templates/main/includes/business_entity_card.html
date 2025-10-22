@@ -1,6 +1,6 @@
 <div class="card my-3">
   <div class="card-header d-flex justify-content-between">
-    <div class="{% if not business_entity.is_active %}text-decoration-line-through{% endif %}"><a href="{% url 'main:business_entity_detail' business_entity.id %}">{{ business_entity.name }}</a></div>
+    <div class="fw-bold {% if not business_entity.is_active %}text-decoration-line-through{% endif %}"><a href="{% url 'main:business_entity_detail' business_entity.id %}">{{ business_entity.name }}</a></div>
     <div>{{ business_entity.get_type_display }}</div>
   </div>
   <ul class="list-group list-group-flush">

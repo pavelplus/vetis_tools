@@ -4,18 +4,10 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.http import Http404
-from django.utils.http import urlencode
 
-from .xml.build_xml import ProductItemListRequest, BusinessEntityByGuidRequest, ActivityLocationList
-from .tasks import send_soap_request
+from main.util import build_url
 from .models import ApiRequestsHistoryRecord
 from vetis_tools.celery import test_mul, debug_task
-
-
-def build_url(url_name, *args, **kwargs):
-    url = reverse(url_name, args=args)
-    params = urlencode(kwargs)
-    return f'{url}?{params}'
 
 
 def apitest(request):
@@ -39,7 +31,7 @@ def apitest(request):
     if request.method == 'POST' and request.POST.get('send_test_task'):
         task = test_mul.delay(2,3)
         # return redirect(f'{reverse('vetis_api:apitest')}?task_id={task.task_id}')
-        return redirect(build_url('vetis_api:apitest',task_id=task.task_id))
+        return redirect(build_url('vetis_api:apitest', task_id=task.task_id))
 
     # if request.GET.get('task_id'):
     #     task_id = request.GET.get('task_id')

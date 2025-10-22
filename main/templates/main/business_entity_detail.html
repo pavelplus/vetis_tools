@@ -16,7 +16,7 @@
     {% endif %}
     <div class="card my-3">
       <div class="card-header d-flex justify-content-between">
-        <div class="{% if not enterprise.is_active %}text-decoration-line-through{% endif %}">{{ enterprise.name }}</div>
+        <div class="fw-bold {% if not enterprise.is_active %}text-decoration-line-through{% endif %}">{{ enterprise.name }}</div>
         <div>{{ enterprise.get_type_display }}</div>
       </div>
       <div class="card-body">{{ enterprise.address }}</div>

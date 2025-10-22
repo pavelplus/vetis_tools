@@ -1,0 +1,21 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+  {% load django_bootstrap5 %}
+  
+  <div class="row mt-5 justify-content-center">
+    <div class="col-lg-8">
+      <h3 class="mb-3">Выбор подключения</h3>
+      <form method="post">
+        {% csrf_token %}
+        {% bootstrap_field form.business_entity %}
+        <div id="enterprise">{% include "main/includes/enterprise_select_field.html" %}</div>
+
+        <div class="mt-4 d-flex justify-content-between">
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+          <a class="btn btn-secondary" href="javascript:history.back()">Отмена</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

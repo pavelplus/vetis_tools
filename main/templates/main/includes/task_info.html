@@ -1,0 +1,8 @@
+<div class="alert alert-info mt-3" role="alert">Статус задачи {{ task_info.task_id }}: {{ task_info.state }}</div>
+{% if task_info.ready %}
+  <div class="alert alert-info mt-3" role="alert">{{ task_info.result.result }}: {{ task_info.result.message }}</div>
+{% else %}
+  <div class="row text-center">
+    <i class="bi bi-hourglass-split" style="font-size: 3rem;"></i>
+  </div>
+{% endif %}

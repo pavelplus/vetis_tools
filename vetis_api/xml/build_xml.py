@@ -14,10 +14,38 @@ class AbstractRequest:
     soap_action = None
 
     def __init__():
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def get_xml(self):
-        raise NotImplementedError
+        raise NotImplementedError()
+
+
+class ProductByGuidRequest(AbstractRequest):
+    endpoint_name = 'ProductService'
+    soap_action = 'GetProductByGuid'
+
+    def __init__(self, product_guid: str):
+        self.product_guid = product_guid
+
+    def get_xml(self) -> str:
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetProductByGuid.xml', context)
+    
+
+class SubproductByGuidRequest(AbstractRequest):
+    endpoint_name = 'ProductService'
+    soap_action = 'GetSubProductByGuid'
+
+    def __init__(self, subproduct_guid: str):
+        self.subproduct_guid = subproduct_guid
+
+    def get_xml(self) -> str:
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetSubproductByGuid.xml', context)
 
 
 class ProductItemListRequest(AbstractRequest):
@@ -52,7 +80,7 @@ class BusinessEntityByGuidRequest(AbstractRequest):
         return render_to_string('vetis_api/xml/GetBusinessEntityByGuid.xml', context)
     
 
-class ActivityLocationList(AbstractRequest):
+class ActivityLocationListRequest(AbstractRequest):
 
     endpoint_name = 'EnterpriseService'
     soap_action = 'GetActivityLocationList'
@@ -67,3 +95,5 @@ class ActivityLocationList(AbstractRequest):
             'vetis_request': self
         }
         return render_to_string('vetis_api/xml/GetActivityLocationList.xml', context)
+
+
