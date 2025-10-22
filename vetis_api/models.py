@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from django.db import models
+from django.core.exceptions import ObjectDoesNotExist
 
 from main.models import User
 
@@ -164,6 +165,14 @@ class ProductItem(models.Model):
 class Unit(models.Model):
     guid = models.UUIDField(unique=True)
     name = models.CharField(max_length=255, verbose_name='название')
+
+    @classmethod
+    def get_or_create(cls, guid: str, name: str):
+        try:
+            unit = cls.objects.get(guid=guid)
+        except ObjectDoesNotExist:
+            unit = cls.objects.create(guid=guid, name=name)
+        return unit
 
     def __str__(self):
         return self.name
@@ -365,7 +374,20 @@ class PackingType(models.Model):
     guid = models.UUIDField(unique=True)
     uuid = models.UUIDField(unique=True)
     name = models.CharField(max_length=2, verbose_name='идентификатор')
-    globalID = models.CharField(max_length=255, verbose_name='название')
+    global_id = models.CharField(max_length=255, verbose_name='название')
+
+    @classmethod
+    def get_or_create(cls, guid: str, uuid: str, name: str, global_id: str):
+        try:
+            packing_type = cls.objects.get(guid=guid)
+        except ObjectDoesNotExist:
+            packing_type = cls.objects.create(
+                guid=guid,
+                uuid=uuid,
+                name=name,
+                global_id=global_id
+                )
+        return packing_type
 
     def __str__(self):
         return self.name
@@ -385,7 +407,7 @@ class Package(models.Model):
         (5, 'Дополнительный уровень'),
         (6, 'Транспортный уровень'),
     )
-    
+
     stock_entry = models.ForeignKey(StockEntry, on_delete=models.PROTECT, verbose_name='запись журнала')
     level = models.IntegerField(choices=LEVEL_CHOICES, verbose_name='уровень')
     packing_type = models.ForeignKey(PackingType, on_delete=models.PROTECT, verbose_name='тип упаковки')

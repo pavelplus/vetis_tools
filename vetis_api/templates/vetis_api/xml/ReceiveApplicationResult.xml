@@ -1,0 +1,11 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+xmlns:apldef="http://api.vetrf.ru/schema/cdm/application/ws-definitions">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <apldef:receiveApplicationResultRequest>
+         <apldef:apiKey>{{ vetis_request.api_key }}</apldef:apiKey>
+         <apldef:issuerId>{{ vetis_request.issuer_id }}</apldef:issuerId>
+         <apldef:applicationId>{{ vetis_request.application_id }}</apldef:applicationId>
+      </apldef:receiveApplicationResultRequest>
+   </soapenv:Body>
+</soapenv:Envelope>

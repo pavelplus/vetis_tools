@@ -1,13 +1,10 @@
+from datetime import datetime
+
 from django.template.loader import render_to_string
 
 
-""" def _ns(ns: str, name: str) -> str:
-    return f'{{{NAMESPACES[ns]}}}{name}'
+VETIS_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 
-
-def _register_namespaces() -> None:
-    for prefix, uri in NAMESPACES.items():
-        ET.register_namespace(prefix, uri) """
 
 class AbstractRequest:
     endpoint_name = None
@@ -46,6 +43,20 @@ class SubproductByGuidRequest(AbstractRequest):
             'vetis_request': self
         }
         return render_to_string('vetis_api/xml/GetSubproductByGuid.xml', context)
+
+
+class ProductItemByGuidRequest(AbstractRequest):
+    endpoint_name = 'ProductService'
+    soap_action = 'GetProductItemByGuid'
+
+    def __init__(self, product_item_guid: str):
+        self.product_item_guid = product_item_guid
+
+    def get_xml(self) -> str:
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetProductItemByGuid.xml', context)
 
 
 class ProductItemListRequest(AbstractRequest):
@@ -97,3 +108,66 @@ class ActivityLocationListRequest(AbstractRequest):
         return render_to_string('vetis_api/xml/GetActivityLocationList.xml', context)
 
 
+class GetStockEntryListRequest(AbstractRequest):
+
+    endpoint_name = 'ApplicationManagementService'
+    soap_action = 'submitApplicationRequest'
+
+    def __init__(self, enterprise_guid: str, api_key: str, service_id: str, issuer_id: str, initiator_login: str, list_count: int = 1000, list_offset: int = 0):
+        self.enterprise_guid = enterprise_guid
+        self.api_key = api_key
+        self.service_id = service_id
+        self.issuer_id = issuer_id
+        self.initiator_login = initiator_login
+        self.list_count = list_count
+        self.list_offset = list_offset
+    
+    def get_xml(self):
+        self.issue_date = datetime.now().strftime(VETIS_DATETIME_FORMAT)
+        self.local_transaction_id = datetime.now().strftime('%Y%m%d-%H%M%S')
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetStockEntryList.xml', context)
+    
+
+class GetStockEntryChangesListRequest(AbstractRequest):
+
+    endpoint_name = 'ApplicationManagementService'
+    soap_action = 'submitApplicationRequest'
+
+    def __init__(self, enterprise_guid: str, begin_date: datetime, end_date: datetime, api_key: str, service_id: str, issuer_id: str, initiator_login: str, list_count: int = 1000, list_offset: int = 0):
+        self.enterprise_guid = enterprise_guid
+        self.begin_date = begin_date.strftime(VETIS_DATETIME_FORMAT)
+        self.end_date = end_date.strftime(VETIS_DATETIME_FORMAT)
+        self.api_key = api_key
+        self.service_id = service_id
+        self.issuer_id = issuer_id
+        self.initiator_login = initiator_login
+        self.list_count = list_count
+        self.list_offset = list_offset
+    
+    def get_xml(self):
+        self.issue_date = datetime.now().strftime(VETIS_DATETIME_FORMAT)
+        self.local_transaction_id = datetime.now().strftime('%Y%m%d-%H%M%S')
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetStockEntryChangesList.xml', context)
+        
+
+class ReceiveApplicationResultRequest(AbstractRequest):
+
+    endpoint_name = 'ApplicationManagementService'
+    soap_action = 'receiveApplicationResult'
+
+    def __init__(self, api_key: str, issuer_id: str, application_id: str):
+        self.api_key = api_key
+        self.issuer_id = issuer_id
+        self.application_id = application_id
+
+    def get_xml(self):
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/ReceiveApplicationResult.xml', context)

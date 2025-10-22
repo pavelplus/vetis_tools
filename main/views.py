@@ -5,9 +5,10 @@ from django.urls import reverse
 from django.http import Http404
 from django.template.response import TemplateResponse
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 
 from vetis_api.models import BusinessEntity, Enterprise, ProductItem, StockEntry
-from vetis_api.tasks import test_task, reload_enterprises, reload_product_items, reload_product_subproduct
+from vetis_api.tasks import test_task, reload_enterprises, reload_product_items, reload_product_subproduct, update_stock_entries
 from .util import build_url
 from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm
 
@@ -113,7 +114,7 @@ def stock_entries(request):
     ent_id = request.session.get('enterprise', 0)
 
     if not ent_id:
-        messages.add_message(request, messages.WARNING, 'Не выбрано активное предприятие hfhfdhfh!')
+        messages.add_message(request, messages.WARNING, 'Не выбрано активное предприятие!')
         return redirect('main:select_workspace')
 
     stock_entries = StockEntry.objects.none()
@@ -151,11 +152,13 @@ def task_info(request):
         raise Http404("Task not found.")
 
 
+@login_required
 def vetis_task(request):
     vetis_task = None
     if request.method == 'POST':
         vetis_task = request.POST.get('vetis_task')
         be_id = request.session.get('business_entity', 0)
+        ent_id = request.session.get('enterprise', 0)
 
         try:
             be = BusinessEntity.objects.get(id=be_id)
@@ -183,6 +186,14 @@ def vetis_task(request):
                 task_id = reload_product_subproduct.delay(credentials_id)
                 next = reverse('main:product_items')
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
+            
+            if vetis_task == 'update_stock_entries':
+                if request.user.vetis_login:
+                    task_id = update_stock_entries.delay(credentials_id, request.user.vetis_login, ent_id)
+                    next = reverse('main:product_items')
+                    return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
+                else:
+                    messages.add_message(request, messages.ERROR, 'Для пользователя не задан логин Ветис!')
 
         else:
             messages.add_message(request, messages.ERROR, 'Не выбрано подключение!')

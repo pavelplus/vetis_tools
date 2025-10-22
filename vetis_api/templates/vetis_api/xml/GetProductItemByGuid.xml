@@ -1,0 +1,10 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:bs="http://api.vetrf.ru/schema/cdm/base"
+    xmlns:ws="http://api.vetrf.ru/schema/cdm/registry/ws-definitions/v2">
+    <soapenv:Header />
+    <soapenv:Body>
+        <ws:getProductItemByGuidRequest>
+            <bs:guid>{{ vetis_request.product_item_guid }}</bs:guid>
+        </ws:getProductItemByGuidRequest>
+    </soapenv:Body>
+</soapenv:Envelope>
