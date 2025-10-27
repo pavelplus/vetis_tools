@@ -1,6 +1,6 @@
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
 xmlns:apldef="http://api.vetrf.ru/schema/cdm/application/ws-definitions"
-xmlns:appl="http://api.vetrf.ru/schema/cdm/application"
+xmlns:apl="http://api.vetrf.ru/schema/cdm/application"
 xmlns:merc="http://api.vetrf.ru/schema/cdm/mercury/g2b/applications/v2"
 xmlns:bs="http://api.vetrf.ru/schema/cdm/base"
 xmlns:vd="http://api.vetrf.ru/schema/cdm/mercury/vet-document/v2"
@@ -9,11 +9,11 @@ xmlns:dt="http://api.vetrf.ru/schema/cdm/dictionary/v2">
    <soapenv:Body>
       <apldef:submitApplicationRequest>
          <apldef:apiKey>{{ vetis_request.api_key }}</apldef:apiKey>
-         <appl:application>
-            <appl:serviceId>{{ vetis_request.service_id }}</appl:serviceId>
-            <appl:issuerId>{{ vetis_request.issuer_id }}</appl:issuerId>
-            <appl:issueDate>{{ vetis_request.issue_date }}</appl:issueDate>
-            <appl:data>
+         <apl:application>
+            <apl:serviceId>{{ vetis_request.service_id }}</apl:serviceId>
+            <apl:issuerId>{{ vetis_request.issuer_id }}</apl:issuerId>
+            <apl:issueDate>{{ vetis_request.issue_date }}</apl:issueDate>
+            <apl:data>
                <merc:getStockEntryListRequest>
          			<merc:localTransactionId>{{ vetis_request.local_transaction_id }}</merc:localTransactionId>
          			<merc:initiator>
@@ -28,8 +28,8 @@ xmlns:dt="http://api.vetrf.ru/schema/cdm/dictionary/v2">
          				<vd:blankFilter>NOT_BLANK</vd:blankFilter>
          			</merc:searchPattern>
          		</merc:getStockEntryListRequest>
-            </appl:data>
-         </appl:application>
+            </apl:data>
+         </apl:application>
       </apldef:submitApplicationRequest>
    </soapenv:Body>
 </soapenv:Envelope>

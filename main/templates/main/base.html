@@ -93,7 +93,7 @@
     {% block workspace%}
       <div class="bg-body-secondary">
         <div class="container-md text-center text-truncate">
-          <a class="link-info link-underline link-underline-opacity-0 link-opacity-50 link-underline-opacity-100-hover link-opacity-100-hover" style="font-size: 80%;" href="{% url 'main:select_workspace' %}">
+          <a class="link-warning link-underline link-underline-opacity-0 link-opacity-75 link-underline-opacity-100-hover link-opacity-100-hover" style="font-size: 80%;" href="{% url 'main:select_workspace' %}">
             {% if request.session.workspace_name %}
               {{ request.session.workspace_name }}
             {% else %}

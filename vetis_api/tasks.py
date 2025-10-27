@@ -27,8 +27,6 @@ from .xml.build_xml import *
 from .xml.settings import NAMESPACES
 
 
-# app = Celery('tasks', broker='pyamqp://guest@192.168.101.242//')
-
 
 # PROD
 ENDPOINTS_PROD = {
@@ -44,6 +42,7 @@ ENDPOINTS_TEST = {
     'ApplicationManagementService': 'https://api2.vetrf.ru:8002/platform/services/2.1/ApplicationManagementService',
 }
 
+
 def send_soap_request(soap_request: AbstractRequest, credentials: VetisCredentials):
     headers = {
         'Content-Type': 'text/html;charset=UTF-8',
@@ -53,19 +52,38 @@ def send_soap_request(soap_request: AbstractRequest, credentials: VetisCredentia
 
     endpoint_url = ENDPOINTS_PROD[soap_request.endpoint_name] if credentials.is_productive else ENDPOINTS_TEST[soap_request.endpoint_name]
 
-    response = requests.post(
-            url=endpoint_url,
-            auth=(credentials.login, credentials.password),
-            headers=headers,
-            data=body
-        )
-    
+    # print(f'send_soap_request: endpoint_url={endpoint_url}, body={body}')
+    # print(f'send_soap_request: headers={headers}')
+    # print(f'send_soap_request: body={body}')
+
+    # return None
+
+    for try_num in range(3):
+        try:
+            response = requests.post(
+                    url=endpoint_url,
+                    auth=(credentials.login, credentials.password),
+                    headers=headers,
+                    data=body
+                )
+        except requests.exceptions.ConnectionError:
+            response = None
+        
+        if response is None:
+            print(f'Connection error on try #{try_num+1}')
+            sleep(5 + 5*try_num)
+        else:
+            break
+
     record = ApiRequestsHistoryRecord()
     record.soap_action = soap_request.soap_action
     record.soap_request = soap_request.get_xml()
-    record.response_status_code = response.status_code
-    record.response_body = response.text
     record.comment = f'{credentials.name} {endpoint_url}'
+    if response is not None:
+        record.response_status_code = response.status_code
+        record.response_body = response.text
+    else:
+        record.response_status_code = 0
     record.save()
     
     return response
@@ -77,12 +95,15 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
 
     response = send_soap_request(soap_request, credentials)
 
+    if response is None:
+        return {'result': 'error', 'message': 'Ошибка соединения'}
+
     if response.status_code != 200:
         return {'result': 'error', 'message': f'Ошибка запроса ({response.status_code}): {response.reason}'}
 
     result_xml = ET.fromstring(response.text)
 
-    response_xml = result_xml.find('./soapenv:Body/ws:submitApplicationResponse', NAMESPACES)
+    response_xml = result_xml.find('./soapenv:Body/apldef:submitApplicationResponse', NAMESPACES)
 
     status = response_xml.find('apl:application/apl:status', NAMESPACES).text
 
@@ -102,14 +123,19 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
         
         response = send_soap_request(application_result_request, credentials)
 
+        if response is None:
+            return {'result': 'error', 'message': 'Ошибка соединения'}
+
         if response.status_code != 200:
             return {'result': 'error', 'message': f'Ошибка запроса при ожидании двухэтапного ответа ({response.status_code}): {response.reason}'}
         
         result_xml = ET.fromstring(response.text)
 
-        response_xml = result_xml.find('./soapenv:Body/ws:receiveApplicationResultResponse', NAMESPACES)
+        response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse', NAMESPACES)
 
         status = response_xml.find('apl:application/apl:status', NAMESPACES).text
+
+        print(f'Status: {status}')
 
         if status == 'COMPLETED':
             return {'result': 'success', 'response': response}
@@ -152,6 +178,9 @@ def reload_enterprises(credentials_id: int, business_entity_id: int):
             soap_request = ActivityLocationListRequest(business_entity.guid, list_count, list_offset)
 
             response = send_soap_request(soap_request, credentials)
+
+            if response is None:
+                return {'result': 'error', 'message': 'Ошибка соединения'}
 
             if response.status_code != 200:
                 return {'result': 'error', 'message': f'Ошибка запроса ({response.status_code}): {response.reason}'}
@@ -217,6 +246,10 @@ def get_or_load_product_by_guid(credentials: VetisCredentials, product_guid: str
 
     soap_request = ProductByGuidRequest(product_guid)
     response = send_soap_request(soap_request, credentials)
+
+    if response is None:
+        raise BadRequest()
+    
     sleep(0.5)
     
     if response.status_code != 200:
@@ -266,6 +299,10 @@ def get_or_load_subproduct_by_guid(credentials: VetisCredentials, subproduct_gui
 
     soap_request = SubproductByGuidRequest(subproduct_guid)
     response = send_soap_request(soap_request, credentials)
+
+    if response is None:
+        raise BadRequest()
+    
     sleep(0.5)
     
     if response.status_code != 200:
@@ -320,6 +357,10 @@ def get_or_load_product_item_by_guid(credentials: VetisCredentials, product_item
 
     soap_request = ProductItemByGuidRequest(product_item_guid)
     response = send_soap_request(soap_request, credentials)
+
+    if response is None:
+        raise BadRequest()
+    
     sleep(0.5)
     
     if response.status_code != 200:
@@ -347,7 +388,9 @@ def get_or_load_product_item_by_guid(credentials: VetisCredentials, product_item
     product_item.guid = product_item_xml.find('bs:guid', NAMESPACES).text
     product_item.uuid = product_item_xml.find('bs:uuid', NAMESPACES).text
     product_item.is_active = product_item_xml.find('bs:active', NAMESPACES).text == 'true'
-    product_item.name = product_item_xml.find('dt:name', NAMESPACES).text
+    name_xml = product_item_xml.find('dt:name', NAMESPACES)
+    if name_xml is not None:
+        product_item.name = name_xml.text
     globalID_xml = product_item_xml.find('dt:globalID', NAMESPACES)
     if globalID_xml is not None:
         product_item.gtin = globalID_xml.text
@@ -356,10 +399,14 @@ def get_or_load_product_item_by_guid(credentials: VetisCredentials, product_item
     product_item.product = get_or_load_product_by_guid(credentials=credentials, product_guid=product_item.product_guid)
     product_item.subproduct_guid = product_item_xml.find('dt:subProduct/bs:guid', NAMESPACES).text
     product_item.subproduct = get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=product_item.subproduct_guid)
+    if name_xml is None:
+        product_item.name = product_item.subproduct.name
     product_item.is_gost = product_item_xml.find('dt:correspondsToGost', NAMESPACES).text == 'true'
     if product_item.is_gost:
         product_item.gost = product_item_xml.find('dt:gost', NAMESPACES).text
-    product_item.producer_guid = product_item_xml.find('dt:producer/bs:guid', NAMESPACES).text
+    producer_guid_xml = product_item_xml.find('dt:producer/bs:guid', NAMESPACES)
+    if producer_guid_xml is not None:
+        product_item.producer_guid = producer_guid_xml.text
     producer = BusinessEntity.objects.filter(guid=product_item.producer_guid).first()
     if producer is not None:
         product_item.producer = producer
@@ -414,6 +461,9 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
 
             response = send_soap_request(soap_request, credentials)
 
+            if response is None:
+                return {'result': 'error', 'message': 'Ошибка соединения'}
+
             if response.status_code != 200:
                 return {'result': 'error', 'message': f'Ошибка запроса ({response.status_code}): {response.reason}'}
             
@@ -445,18 +495,25 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
                 product_item.guid = product_item_xml.find('bs:guid', NAMESPACES).text
                 product_item.uuid = product_item_xml.find('bs:uuid', NAMESPACES).text
                 product_item.is_active = product_item_xml.find('bs:active', NAMESPACES).text == 'true'
-                product_item.name = product_item_xml.find('dt:name', NAMESPACES).text
+                name_xml = product_item_xml.find('dt:name', NAMESPACES)
+                if name_xml is not None:
+                    product_item.name = name_xml.text
                 globalID_xml = product_item_xml.find('dt:globalID', NAMESPACES)
                 if globalID_xml is not None:
                     product_item.gtin = globalID_xml.text
-                    print(f'Found GTIN: {product_item.gtin}')
                 product_item.product_type = int(product_item_xml.find('dt:productType', NAMESPACES).text)
                 product_item.product_guid = product_item_xml.find('dt:product/bs:guid', NAMESPACES).text
+                product_item.product = get_or_load_product_by_guid(credentials=credentials, product_guid=product_item.product_guid)
                 product_item.subproduct_guid = product_item_xml.find('dt:subProduct/bs:guid', NAMESPACES).text
+                product_item.subproduct = get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=product_item.subproduct_guid)
+                if name_xml is None:
+                    product_item.name = product_item.subproduct.name
                 product_item.is_gost = product_item_xml.find('dt:correspondsToGost', NAMESPACES).text == 'true'
                 if product_item.is_gost:
                     product_item.gost = product_item_xml.find('dt:gost', NAMESPACES).text
-                product_item.producer_guid = product_item_xml.find('dt:producer/bs:guid', NAMESPACES).text
+                producer_guid_xml = product_item_xml.find('dt:producer/bs:guid', NAMESPACES)
+                if producer_guid_xml is not None:
+                    product_item.producer_guid = producer_guid_xml.text
                 product_item.producer = business_entity
 
                 product_item.save()
@@ -483,7 +540,196 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
         product_item.subproduct = subproduct
         product_item.save()
 
-    return {'result': 'success', 'message': 'Список продукции обновлен.'}
+    return {'result': 'success', 'message': f'Список продукции обновлен. Всего: {total}'}
+
+
+def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, stock_entry_xml: ET.Element, credentials: VetisCredentials):
+
+    # enterprise
+    # guid
+    # uuid
+    # is_active
+    # is_last
+    # status
+    # date_created
+    # date_updated
+    # previous_uuid
+    # next_uuid
+    # entry_number
+
+    stock_entry.enterprise = enterprise
+    stock_entry.guid = stock_entry_xml.find('bs:guid', NAMESPACES).text
+    stock_entry.uuid = stock_entry_xml.find('bs:uuid', NAMESPACES).text
+    stock_entry.is_active = stock_entry_xml.find('bs:active', NAMESPACES).text == 'true'
+    stock_entry.is_last = stock_entry_xml.find('bs:last', NAMESPACES).text == 'true'
+    stock_entry.status = int(stock_entry_xml.find('bs:status', NAMESPACES).text)
+    stock_entry.date_created = datetime.fromisoformat(stock_entry_xml.find('bs:createDate', NAMESPACES).text)
+    stock_entry.date_updated = datetime.fromisoformat(stock_entry_xml.find('bs:updateDate', NAMESPACES).text)
+    previous_uuid_xml = stock_entry_xml.find('bs:previous', NAMESPACES)
+    if previous_uuid_xml is not None:
+        stock_entry.previous_uuid = previous_uuid_xml.text
+    next_uuid_xml = stock_entry_xml.find('bs:next', NAMESPACES)
+    if next_uuid_xml is not None:
+        stock_entry.next_uuid = next_uuid_xml.text
+    stock_entry.entry_number = stock_entry_xml.find('vd:entryNumber', NAMESPACES).text
+
+    batch_xml = stock_entry_xml.find('vd:batch', NAMESPACES)
+    
+    # product_type
+    # product_guid
+    # product
+    # subproduct_guid
+    # subproduct
+
+    stock_entry.product_type = int(batch_xml.find('vd:productType', NAMESPACES).text)
+    stock_entry.product_guid = batch_xml.find('vd:product/bs:guid', NAMESPACES).text
+    stock_entry.product = get_or_load_product_by_guid(credentials=credentials, product_guid=stock_entry.product_guid)
+    stock_entry.subproduct_guid = batch_xml.find('vd:subProduct/bs:guid', NAMESPACES).text
+    stock_entry.subproduct = get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=stock_entry.subproduct_guid)
+    
+    # product_item_guid
+    # product_item_name
+    # product_item
+
+    stock_entry.product_item_name = batch_xml.find('vd:productItem/dt:name', NAMESPACES).text
+    product_item_guid_xml = batch_xml.find('vd:productItem/bs:guid', NAMESPACES)
+    if product_item_guid_xml is not None:
+        stock_entry.product_item_guid = product_item_guid_xml.text
+        stock_entry.product_item = get_or_load_product_item_by_guid(credentials=credentials, product_item_guid=stock_entry.product_item_guid)
+
+    # volume
+
+    stock_entry.volume = Decimal(batch_xml.find('vd:volume', NAMESPACES).text)
+
+    # unit
+    
+    unit_guid = batch_xml.find('vd:unit/bs:guid', NAMESPACES).text
+    unit_name = batch_xml.find('vd:unit/dt:name', NAMESPACES).text
+
+    stock_entry.unit = Unit.get_or_create(guid=unit_guid, name=unit_name)
+    
+    # date_produced_1
+    # date_produced_2
+    # date_produced
+
+    date_produced_1_xml = batch_xml.find('vd:dateOfProduction/vd:firstDate', NAMESPACES)
+    year = int(date_produced_1_xml.find('dt:year', NAMESPACES).text)
+    month = int(date_produced_1_xml.find('dt:month', NAMESPACES).text)
+    date_produced_1 = ComplexDate(year=year, month=month)
+    day_xml = date_produced_1_xml.find('dt:day', NAMESPACES)
+    if day_xml is not None:
+        date_produced_1.update('day', int(day_xml.text))
+        hour_xml = date_produced_1_xml.find('dt:hour', NAMESPACES)
+        if hour_xml is not None:
+            date_produced_1.update('hour', int(hour_xml.text))
+    stock_entry.date_produced_1 = date_produced_1.to_string()
+
+    stock_entry.date_produced = date_produced_1.to_datetime()
+
+    date_produced_2_xml = batch_xml.find('vd:dateOfProduction/vd:secondDate', NAMESPACES)
+    if date_produced_2_xml is not None:
+        year = int(date_produced_2_xml.find('dt:year', NAMESPACES).text)
+        month = int(date_produced_2_xml.find('dt:month', NAMESPACES).text)
+        date_produced_2 = ComplexDate(year=year, month=month)
+        day_xml = date_produced_2_xml.find('dt:day', NAMESPACES)
+        if day_xml is not None:
+            date_produced_2.update('day', int(day_xml.text))
+            hour_xml = date_produced_2_xml.find('dt:hour', NAMESPACES)
+            if hour_xml is not None:
+                date_produced_2.update('hour', int(hour_xml.text))
+        stock_entry.date_produced_2 = date_produced_2.to_string()
+
+    # date_expiry_1
+    # date_expiry_2
+    # date_expiry
+
+    date_expiry_1_xml = batch_xml.find('vd:expiryDate/vd:firstDate', NAMESPACES)
+    year = int(date_expiry_1_xml.find('dt:year', NAMESPACES).text)
+    month = int(date_expiry_1_xml.find('dt:month', NAMESPACES).text)
+    date_expiry_1 = ComplexDate(year=year, month=month)
+    day_xml = date_expiry_1_xml.find('dt:day', NAMESPACES)
+    if day_xml is not None:
+        date_expiry_1.update('day', int(day_xml.text))
+        hour_xml = date_expiry_1_xml.find('dt:hour', NAMESPACES)
+        if hour_xml is not None:
+            date_expiry_1.update('hour', int(hour_xml.text))
+    stock_entry.date_expiry_1 = date_expiry_1.to_string()
+
+    stock_entry.date_expiry = date_expiry_1.to_datetime()
+
+    date_expiry_2_xml = batch_xml.find('vd:expiryDate/vd:secondDate', NAMESPACES)
+    if date_expiry_2_xml is not None:
+        year = int(date_expiry_2_xml.find('dt:year', NAMESPACES).text)
+        month = int(date_expiry_2_xml.find('dt:month', NAMESPACES).text)
+        date_expiry_2 = ComplexDate(year=year, month=month)
+        day_xml = date_expiry_2_xml.find('dt:day', NAMESPACES)
+        if day_xml is not None:
+            date_expiry_2.update('day', int(day_xml.text))
+            hour_xml = date_expiry_2_xml.find('dt:hour', NAMESPACES)
+            if hour_xml is not None:
+                date_expiry_2.update('hour', int(hour_xml.text))
+        stock_entry.date_expiry_2 = date_expiry_2.to_string()
+
+    # is_perishable
+
+    stock_entry.is_perishable = batch_xml.find('vd:perishable', NAMESPACES).text == 'true'
+
+    # origin_country
+    # producer_name
+    
+    origin_country_xml = batch_xml.find('vd:origin/vd:country/dt:name', NAMESPACES)
+    if origin_country_xml is not None:
+        stock_entry.origin_country = origin_country_xml.text
+
+    producer_name_xml = batch_xml.find('vd:origin/vd:producer/dt:enterprise/dt:name', NAMESPACES)
+    if producer_name_xml is not None:
+        stock_entry.producer_name = producer_name_xml.text
+
+    producer_guid_xml = batch_xml.find('vd:origin/vd:producer/dt:enterprise/bs:guid', NAMESPACES)
+    if producer_guid_xml is not None:
+        stock_entry.producer_guid = producer_guid_xml.text
+        try:
+            producer = Enterprise.objects.get(guid=stock_entry.producer_guid)
+            stock_entry.producer = producer
+        except ObjectDoesNotExist:
+            pass
+
+    stock_entry.save()
+
+    # packages
+
+    stock_entry.package_set.all().delete()
+
+    for package_xml in batch_xml.findall('vd:packageList/dt:package', NAMESPACES):
+
+        package = Package()
+        package.stock_entry = stock_entry
+        package.level = int(package_xml.find('dt:level', NAMESPACES).text)
+        packing_type_guid = package_xml.find('dt:packingType/bs:guid', NAMESPACES).text
+        packing_type_uuid = package_xml.find('dt:packingType/bs:uuid', NAMESPACES).text
+        packing_type_name = package_xml.find('dt:packingType/dt:name', NAMESPACES).text
+        packing_type_glodal_id = package_xml.find('dt:packingType/dt:globalID', NAMESPACES).text
+        package.packing_type = PackingType.get_or_create(
+            guid=packing_type_guid,
+            uuid=packing_type_uuid,
+            name=packing_type_name,
+            global_id=packing_type_glodal_id
+        )
+        quantity_xml = package_xml.find('dt:quantity', NAMESPACES)
+        if quantity_xml is not None:
+            package.quantity = int(quantity_xml.text)
+        else:
+            package.quantity = 0
+        
+        marks = []
+        for marks_xml in package_xml.findall('dt:productMarks', NAMESPACES):
+            marks.append(marks_xml.text)
+        if marks:
+            package.product_marks = ' '.join(marks)
+
+        package.save()
+
+    # / for package
 
 
 @shared_task
@@ -499,14 +745,15 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
     except ObjectDoesNotExist:
         return {'result': 'error', 'message': 'Не обнаружены параметры подключения!'}
     
-    last_updated_entry = StockEntry.objects.filter(enterprise=enterprise).order_by('-date_updated').first()
+    # last_updated_entry = StockEntry.objects.filter(enterprise=enterprise).order_by('-date_updated').first()
 
-    if last_updated_entry is not None:
+    if enterprise.stock_entries_last_updated is not None:
         update_mode = 'CHANGES'
-        begin_date = (last_updated_entry.date_updated + timedelta(seconds=1))
-        end_date = datetime.now()
+        begin_date = enterprise.stock_entries_last_updated - timedelta(minutes=5) # rolloff slightly just in case
     else:
         update_mode = 'INITIAL'
+
+    end_date = datetime.now(tz=TZ_MOSCOW)
 
     list_count = 1000
     list_offset = 0
@@ -540,10 +787,6 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                     list_offset=list_offset
                 )
 
-            print(soap_request.get_xml())
-
-            return {'result': 'error', 'message': 'Aborted.'}
-
             result = send_2step_soap_request(soap_request, credentials)
 
             if result['result'] != 'success':
@@ -553,10 +796,12 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
 
             result_xml = ET.fromstring(response.text)
             
+            # return {'result': 'error', 'message': 'Aborted.'}
+
             if update_mode == 'INITIAL':
-                response_xml = result_xml.find('./soapenv:Body/ws:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryListResponse/vd:stockEntryList', NAMESPACES)
+                response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryListResponse/vd:stockEntryList', NAMESPACES)
             else:
-                response_xml = result_xml.find('./soapenv:Body/ws:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryChangesListResponse/vd:stockEntryList', NAMESPACES)
+                response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryChangesListResponse/vd:stockEntryList', NAMESPACES)
 
             for stock_entry_xml in response_xml.findall('vd:stockEntry', NAMESPACES):
                 try:
@@ -564,6 +809,14 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                 except:
                     stock_entry = StockEntry()
 
+                fill_stock_entry_from_xml(
+                    stock_entry=stock_entry,
+                    enterprise=enterprise,
+                    stock_entry_xml=stock_entry_xml,
+                    credentials=credentials
+                    )
+                
+                '''
                 # enterprise
                 # guid
                 # uuid
@@ -632,13 +885,13 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                 # date_produced
 
                 date_produced_1_xml = batch_xml.find('vd:dateOfProduction/vd:firstDate', NAMESPACES)
-                year = int(date_produced_1_xml.find('dt:year').text)
-                month = int(date_produced_1_xml.find('dt:month').text)
+                year = int(date_produced_1_xml.find('dt:year', NAMESPACES).text)
+                month = int(date_produced_1_xml.find('dt:month', NAMESPACES).text)
                 date_produced_1 = ComplexDate(year=year, month=month)
-                day_xml = date_produced_1_xml.find('dt:day')
+                day_xml = date_produced_1_xml.find('dt:day', NAMESPACES)
                 if day_xml is not None:
                     date_produced_1.update('day', int(day_xml.text))
-                    hour_xml = date_produced_1_xml.find('dt:hour')
+                    hour_xml = date_produced_1_xml.find('dt:hour', NAMESPACES)
                     if hour_xml is not None:
                         date_produced_1.update('hour', int(hour_xml.text))
                 stock_entry.date_produced_1 = date_produced_1.to_string()
@@ -647,13 +900,13 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
 
                 date_produced_2_xml = batch_xml.find('vd:dateOfProduction/vd:secondDate', NAMESPACES)
                 if date_produced_2_xml is not None:
-                    year = int(date_produced_2_xml.find('dt:year').text)
-                    month = int(date_produced_2_xml.find('dt:month').text)
+                    year = int(date_produced_2_xml.find('dt:year', NAMESPACES).text)
+                    month = int(date_produced_2_xml.find('dt:month', NAMESPACES).text)
                     date_produced_2 = ComplexDate(year=year, month=month)
-                    day_xml = date_produced_2_xml.find('dt:day')
+                    day_xml = date_produced_2_xml.find('dt:day', NAMESPACES)
                     if day_xml is not None:
                         date_produced_2.update('day', int(day_xml.text))
-                        hour_xml = date_produced_2_xml.find('dt:hour')
+                        hour_xml = date_produced_2_xml.find('dt:hour', NAMESPACES)
                         if hour_xml is not None:
                             date_produced_2.update('hour', int(hour_xml.text))
                     stock_entry.date_produced_2 = date_produced_2.to_string()
@@ -663,13 +916,13 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                 # date_expiry
 
                 date_expiry_1_xml = batch_xml.find('vd:expiryDate/vd:firstDate', NAMESPACES)
-                year = int(date_expiry_1_xml.find('dt:year').text)
-                month = int(date_expiry_1_xml.find('dt:month').text)
+                year = int(date_expiry_1_xml.find('dt:year', NAMESPACES).text)
+                month = int(date_expiry_1_xml.find('dt:month', NAMESPACES).text)
                 date_expiry_1 = ComplexDate(year=year, month=month)
-                day_xml = date_expiry_1_xml.find('dt:day')
+                day_xml = date_expiry_1_xml.find('dt:day', NAMESPACES)
                 if day_xml is not None:
                     date_expiry_1.update('day', int(day_xml.text))
-                    hour_xml = date_expiry_1_xml.find('dt:hour')
+                    hour_xml = date_expiry_1_xml.find('dt:hour', NAMESPACES)
                     if hour_xml is not None:
                         date_expiry_1.update('hour', int(hour_xml.text))
                 stock_entry.date_expiry_1 = date_expiry_1.to_string()
@@ -678,13 +931,13 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
 
                 date_expiry_2_xml = batch_xml.find('vd:expiryDate/vd:secondDate', NAMESPACES)
                 if date_expiry_2_xml is not None:
-                    year = int(date_expiry_2_xml.find('dt:year').text)
-                    month = int(date_expiry_2_xml.find('dt:month').text)
+                    year = int(date_expiry_2_xml.find('dt:year', NAMESPACES).text)
+                    month = int(date_expiry_2_xml.find('dt:month', NAMESPACES).text)
                     date_expiry_2 = ComplexDate(year=year, month=month)
-                    day_xml = date_expiry_2_xml.find('dt:day')
+                    day_xml = date_expiry_2_xml.find('dt:day', NAMESPACES)
                     if day_xml is not None:
                         date_expiry_2.update('day', int(day_xml.text))
-                        hour_xml = date_expiry_2_xml.find('dt:hour')
+                        hour_xml = date_expiry_2_xml.find('dt:hour', NAMESPACES)
                         if hour_xml is not None:
                             date_expiry_2.update('hour', int(hour_xml.text))
                     stock_entry.date_expiry_2 = date_expiry_2.to_string()
@@ -704,6 +957,15 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                 if producer_name_xml is not None:
                     stock_entry.producer_name = producer_name_xml.text
 
+                producer_guid_xml = batch_xml.find('vd:origin/vd:producer/dt:enterprise/bs:guid', NAMESPACES)
+                if producer_guid_xml is not None:
+                    stock_entry.producer_guid = producer_guid_xml.text
+                    try:
+                        producer = Enterprise.objects.get(guid=stock_entry.producer_guid)
+                        stock_entry.producer = producer
+                    except ObjectDoesNotExist:
+                        pass
+
                 stock_entry.save()
 
                 # packages
@@ -713,6 +975,7 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                 for package_xml in batch_xml.findall('vd:packageList/dt:package', NAMESPACES):
 
                     package = Package()
+                    package.stock_entry = stock_entry
                     package.level = int(package_xml.find('dt:level', NAMESPACES).text)
                     packing_type_guid = package_xml.find('dt:packingType/bs:guid', NAMESPACES).text
                     packing_type_uuid = package_xml.find('dt:packingType/bs:uuid', NAMESPACES).text
@@ -738,11 +1001,89 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
 
                     package.save()
 
-                # / for package
+                # / for package'''
 
             # / for main
 
             total = int(response_xml.get('total'))
+
+            print(f'Stock entry total: {total}')
+            
+            if total > list_offset + list_count:
+                list_offset += list_count
+                sleep(1.0)
+            else:
+                break
+        # /while
+
+        enterprise.stock_entries_last_updated = end_date
+        enterprise.save()
+
+    # /transaction.atomic   
+
+    return {'result': 'success', 'message': f'Складские записи для предприятия успешно обновлены. Всего: {total}'}
+
+@shared_task
+def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_entry_id: int):
+    try:
+        stock_entry = StockEntry.objects.get(id=stock_entry_id)
+    except ObjectDoesNotExist:
+        return {'result': 'error', 'message': 'Запись журнала не найдена!'}
+    
+    try:
+        credentials = VetisCredentials.objects.get(id=credentials_id)
+    except ObjectDoesNotExist:
+        return {'result': 'error', 'message': 'Не обнаружены параметры подключения!'}
+    
+    enterprise = stock_entry.enterprise
+    
+    list_count = 1000
+    list_offset = 0
+
+    with transaction.atomic():
+
+        while True: # repeat if has pages
+            
+            soap_request = GetStockEntryVersionListRequest(
+                enterprise_guid=enterprise.guid,
+                stock_entry_guid=stock_entry.guid,
+                api_key=credentials.api_key,
+                service_id=credentials.service_id,
+                issuer_id=credentials.issuer_id,
+                initiator_login=initiator_login,
+                list_count=list_count,
+                list_offset=list_offset
+            )
+
+            result = send_2step_soap_request(soap_request, credentials)
+
+            if result['result'] != 'success':
+                return result
+            
+            response = result['response']
+
+            result_xml = ET.fromstring(response.text)
+
+            response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryVersionListResponse/vd:stockEntryList', NAMESPACES)
+
+            for stock_entry_version_xml in response_xml.findall('vd:stockEntry', NAMESPACES):
+                try:
+                    stock_entry_version = StockEntry.objects.get(uuid=stock_entry_version_xml.find('bs:uuid', NAMESPACES).text)
+                except:
+                    stock_entry_version = StockEntry()
+
+                fill_stock_entry_from_xml(
+                    stock_entry=stock_entry_version,
+                    enterprise=enterprise,
+                    stock_entry_xml=stock_entry_version_xml,
+                    credentials=credentials
+                    )
+
+            # /for main
+
+            total = int(response_xml.get('total'))
+
+            print(f'Stock entry version total: {total}')
             
             if total > list_offset + list_count:
                 list_offset += list_count
@@ -752,4 +1093,4 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
         # /while
     # /transaction.atomic   
 
-    return {'result': 'success', 'message': 'Складские записи для предприятия успешно обновлены.'}
+    return {'result': 'success', 'message': f'История для записи журнала успешно обновлена. Всего: {total}'}

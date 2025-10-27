@@ -10,13 +10,15 @@ from .models import (
     SubProduct,
     Unit,
     StockEntry,
-    PackingType
+    PackingType,
+    Package
     )
 
 
 @admin.register(ApiRequestsHistoryRecord)
 class ApiRequestsHistoryRecordAdmin(admin.ModelAdmin):
-    list_display = ['datetime', 'soap_action', 'response_status_code', 'comment'] 
+    list_display = ['datetime', 'soap_action', 'response_status_code', 'comment']
+    list_filter = ['datetime', 'soap_action']
 
 
 @admin.register(VetisCredentials)
@@ -53,12 +55,19 @@ class ProductItemAdmin(admin.ModelAdmin):
 class UnitAdmin(admin.ModelAdmin):
     list_display = ['name']
 
+@admin.register(Package)
+class PackageAdmin(admin.ModelAdmin):
+    list_display = ['level', 'packing_type', 'quantity', 'product_marks']
+
+class PackageInline(admin.TabularInline):
+    model = Package
+    fields = ['level', 'packing_type', 'quantity', 'product_marks']
 
 @admin.register(StockEntry)
 class StockEntryAdmin(admin.ModelAdmin):
     list_display = ['product_item_name', 'product_type', 'enterprise', 'volume']
-
+    inlines = [PackageInline]
 
 @admin.register(PackingType)
 class PackingTypeAdmin(admin.ModelAdmin):
-    list_display = ['name']
+    list_display = ['name', 'global_id']

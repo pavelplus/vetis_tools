@@ -1,7 +1,7 @@
 from django import forms
 from django.urls import reverse_lazy
 
-from vetis_api.models import BusinessEntity, Enterprise
+from vetis_api.models import BusinessEntity, Enterprise, Product
 
 
 class WorkspaceSelectionForm(forms.Form):
@@ -20,4 +20,8 @@ class ProductItemsFilterForm(forms.Form):
 
 
 class StockEntriesFilterForm(forms.Form):
-    search_query = forms.CharField(max_length=100, label='Название', required=False)
+    search_query = forms.CharField(max_length=100, label='Название', required=False, widget=forms.widgets.TextInput(attrs={'autocomplete': 'off'}))
+    product = forms.ModelChoiceField(queryset=Product.objects.all(), label='Продукция', required=False)
+    has_quantity = forms.BooleanField(label='Непустые', initial=True, required=False)
+    date_produced_begin = forms.DateField(label='Выпущено с', required=False, widget=forms.widgets.DateInput(attrs={'type': 'date'}))
+    date_produced_end = forms.DateField(label='Выпущено по', required=False, widget=forms.widgets.DateInput(attrs={'type': 'date'}))

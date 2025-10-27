@@ -1,0 +1,154 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+  <h3 class="mt-3">Запись складского журнала</h3>
+  
+  <table class="table">
+    <tbody>
+      <tr>
+        <th scope="row">Номер записи</th>
+        <td>
+          {{ stock_entry.entry_number }}
+          {% if not stock_entry.is_last %}<span class="badge text-bg-warning">НЕПОСЛЕДНЯЯ ВЕРСИЯ</span>{% endif %}
+          {% if not stock_entry.is_active %}<span class="badge text-bg-secondary">неактивна</span>{% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Создана</th>
+        <td>
+          {{ stock_entry.date_created }}
+          <span class="badge text-bg-info">{{ stock_entry.get_status_display }}</span>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Изменена</th>
+        <td>
+          {{ stock_entry.date_updated }}
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Предприятие</th>
+        <td>
+          {{ stock_entry.enterprise }}
+          <a href="{% url 'main:business_entity_detail' stock_entry.enterprise.business_entity.id %}" title="Карточка хозяйствующего субъекта"><i class="bi bi-box-arrow-up-right"></i></a>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Продукция</th>
+        <td>
+          <p class="text-secondary my-0">
+            {{ stock_entry.get_product_type_display }}
+            <i class="bi bi-caret-right-fill"></i> {{ stock_entry.product }}
+            <i class="bi bi-caret-right-fill"></i> {{ stock_entry.subproduct }}
+          </p>
+          <p class="fw-bold my-0">
+            {{ stock_entry.product_item_name }}
+            {% if stock_entry.product_item %}
+              <a href="{% url 'main:product_item_detail' stock_entry.product_item.id %}" title="Карточка наименования продукции"><i class="bi bi-box-arrow-up-right"></i></a>
+            {% endif %}
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Остаток</th>
+        <td>
+          <p class="fw-bold my-0">{{ stock_entry.volume|floatformat }}&nbsp;{{ stock_entry.unit }}</p>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Упаковка</th>
+        <td>
+          {% for package in stock_entry.package_set.all %}
+            <p class="my-0">
+              {{ package.get_level_display }}:
+              {{ package.packing_type }} -
+              {{ package.quantity }} шт
+              <span class="text-secondary">{{ package.product_marks }}</span>
+            </p>
+          {% endfor %}
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Произведено</th>
+        <td>
+          {{ stock_entry.date_produced_display }}
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Срок годности</th>
+        <td>
+          <span class="{{ stock_entry.date_expiry_class }}">{{ stock_entry.date_expiry_display }}</span>
+          {% if stock_entry.is_perishable %}<span class="badge text-bg-warning">СКОРОПОРТ</span>{% endif %}
+        </td>
+      </tr>
+      {% if stock_entry.origin_country %}
+        <tr>
+          <th scope="row">Страна</th>
+          <td>{{ stock_entry.origin_country }}</td>
+        </tr>
+      {% endif %}
+      {% if stock_entry.producer_name %}
+        <tr>
+          <th scope="row">Производитель</th>
+          <td>
+            {% if stock_entry.producer %}<i class="bi bi-house text-info"></i>{% endif %}
+            {{ stock_entry.producer_name }}
+          </td>
+        </tr>
+      {% endif %}
+      <tr style="font-size: 75%">
+        <th scope="row" class="text-secondary">Служебные</th>
+        <td class="text-secondary">
+          GUID: {{ stock_entry.guid }} <i class="bi bi-dash"></i>
+          UUID: {{ stock_entry.uuid }} <i class="bi bi-dash"></i>
+          ID: {{ stock_entry.id }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="mt-5 d-flex justify-content-between">
+    <h4>История изменения записи</h4>
+    <form method="POST" action="{% url 'main:vetis_task' %}">
+      {% csrf_token %}
+      <input type="hidden" name="stock_entry_id" value="{{ stock_entry.id }}" />
+      <button class="btn btn-primary" name="vetis_task" value="reload_stock_entry_history"
+        onclick="return window.confirm('Будут загружены данные с сайта Ветис. Вы уверены?')">
+        Загрузить (обновить) историю
+      </button>
+    </form>
+  </div>
+  <table class="table">
+    <thead>
+      <tr>
+        <th scope="col">&nbsp;</th>
+        <th scope="col">Создана</th>
+        <th scope="col">Изменена</th>
+        <th scope="col">Причина</th>
+        <th scope="col">Остаток</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for se in stock_entry_history %}
+        {% if se.id == stock_entry.id %}
+          <tr class="table-active">
+        {% else %}
+          <tr>
+        {% endif %}
+          <td>
+            {% if se.id == stock_entry.id %}
+              <i class="bi bi-arrow-right-square text-warning"></i>
+            {% else %}
+              <a href="{% url 'main:stock_entry_detail' se.id %}" title="Перейти к версии"><i class="bi bi-box-arrow-up-right"></i></a>
+            {% endif %}
+          </td>
+          <td>{{ se.date_created }}</td>
+          <td>{{ se.date_updated }}</td>
+          <td>{{ se.get_status_display }}</td>
+          <td>{{ se.volume|floatformat }}&nbsp;{{ se.unit }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+{% endblock %}

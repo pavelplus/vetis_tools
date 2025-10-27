@@ -4,6 +4,11 @@
   {% load django_bootstrap5 %}
   <div class="d-flex justify-content-between align-items-end">
     <h3 class="mt-3">Складской журнал</h3>
+    <div><small class="text-secondary">
+      <i class="bi bi-calendar-check"></i> Журнал обновлен: {{ stock_last_updated|default:"---" }}
+      <br />
+      <i class="bi bi-calendar-check"></i> Последнее событие: {{ entries_last_updated|default:"---"  }}
+    </small></div>
     <form method="POST" action="{% url 'main:vetis_task' %}">
       {% csrf_token %}
       <div class="dropdown">
@@ -12,47 +17,59 @@
           <li>
             <button class="dropdown-item" name="vetis_task" value="update_stock_entries" onclick="return window.confirm('Будут загружены данные с сайта Ветис. Вы уверены?')">Обновить записи журнала</button>
           </li>
-          <li>
-            <button class="dropdown-item" name="vetis_task" value="" onclick="return window.confirm('Будут загружены данные с сайта Ветис. Вы уверены?')">Действие 2</button>
-          </li>
         </ul>
       </div>
     </form>
   </div>
 
-  <form method="POST" name="search_form">
+  <form method="POST" name="search_form" class="mb-3">
     {% csrf_token %}
     <div class="row align-items-end">
+      {% bootstrap_field form.product wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
       {% bootstrap_field form.search_query wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
-      <div class="col-lg-3">
+      {% bootstrap_field form.has_quantity wrapper_class='col-lg-1 mb-3 mb-lg-0' %}
+      <div class="col-lg-3 d-flex justify-content-end">
         <button class="btn btn-primary" name="search" type="submit">Применить</button>
+        <a class="ms-1 btn {{ btn_filters_class }}" data-bs-toggle="collapse" href="#collapseFilter" title="Еще фильтры">
+          <i class="bi bi-funnel"></i>
+        </a>
+      </div>
+    </div>
+    <div class="collapse" id="collapseFilter">
+      <div class="row mt-3">
+        {% bootstrap_field form.date_produced_begin wrapper_class='col-lg-3 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.date_produced_end wrapper_class='col-lg-3 mb-3 mb-lg-0' %}
       </div>
     </div>
   </form>
-  <hr />
   {% for stock_entry in stock_entries %}
     {% if forloop.first %}
+      <p class="my-0 text-secondary border-bottom"><small>Показано записей: {{ stock_entries.count }}</small></p>
       <table class="table table-striped">
         <thead>
           <tr>
+            <th scope="col">Номер</th>
             <th scope="col">Наименование</th>
-            <th scope="col">Тип продукции</th>
-            <th scope="col">ГОСТ</th>
-            <th scope="col">Производитель</th>
+            <th scope="col">Произведено</th>
+            <th scope="col">Срок годности</th>
+            <th scope="col">Объем</th>
           </tr>
         </thead>
         <tbody>
     {% endif %}
-          {% comment %} <tr>
-            <td><a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:product_item_detail' product_item.id %}">{{ product_item.name }}</a></td>
-            <td>{{ product_item.get_product_type_display }}</td>
-            {% if product_item.is_gost %}
-            <td>{{ product_item.gost }}</td>
-            {% else %}
-            <td>-</td>
-            {% endif %}
-            <td>{{ product_item.producer }}</td>
-          </tr> {% endcomment %}
+          <tr>
+            <td><a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:stock_entry_detail' stock_entry.id %}">{{ stock_entry.entry_number }}</a></td>
+            <td class="{{ stock_entry.volume|yesno:',text-secondary-emphasis' }}">{{ stock_entry.product_item_name }}</td>
+            <td><small>{{ stock_entry.date_produced_display }}</small></td>
+            <td><small class="{{ stock_entry.date_expiry_class }}">{{ stock_entry.date_expiry_display }}</small></td>
+            <td>
+              {% if stock_entry.volume %}
+                {{ stock_entry.volume|floatformat }}&nbsp;{{ stock_entry.unit }}
+              {% else %}
+                <i class="bi bi-dash"></i>
+              {% endif %}
+            </td>
+          </tr>
     {% if forloop.last %}
         </tbody>
       </table>

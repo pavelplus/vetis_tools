@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from django.db import models
 from django.core.exceptions import ObjectDoesNotExist
@@ -16,6 +16,8 @@ PRODUCT_TYPES = (
     (7, 'Рыба и морепродукты'),
     (8, 'Продукция, не требующая разрешения'),
 )
+
+TZ_MOSCOW = timezone(timedelta(hours=3))
 
 
 class ApiRequestsHistoryRecord(models.Model):
@@ -94,6 +96,7 @@ class Enterprise(models.Model):
     number_list = models.CharField(blank=True, verbose_name='номера предприятия')
     address = models.CharField(blank=True, max_length=255, verbose_name='адрес')
     is_active = models.BooleanField(default=True, verbose_name='активно')
+    stock_entries_last_updated = models.DateTimeField(null=True, blank=True, verbose_name='последнее обновление журнала')
 
     def __str__(self):
         return f'{self.name} ({self.address})'
@@ -150,7 +153,7 @@ class ProductItem(models.Model):
     subproduct = models.ForeignKey(SubProduct, null=True, verbose_name='вид продукции', on_delete=models.PROTECT)
     is_gost = models.BooleanField(default=False, verbose_name='соответствует ГОСТ')
     gost = models.CharField(blank=True, max_length=255, verbose_name='ГОСТ')
-    producer_guid = models.UUIDField(verbose_name='производитель (GUID)')
+    producer_guid = models.UUIDField(blank=True, null=True, verbose_name='производитель (GUID)')
     producer = models.ForeignKey(BusinessEntity, null=True, verbose_name='производитель', on_delete=models.PROTECT)
 
     def __str__(self):
@@ -166,6 +169,7 @@ class Unit(models.Model):
     guid = models.UUIDField(unique=True)
     name = models.CharField(max_length=255, verbose_name='название')
 
+    # TODO implement native get_or_create logic https://docs.djangoproject.com/en/5.2/ref/models/querysets/#get-or-create
     @classmethod
     def get_or_create(cls, guid: str, name: str):
         try:
@@ -184,13 +188,16 @@ class Unit(models.Model):
 
 
 class ComplexDate():
+    """
+    Contains required year, month and optional day, hour.
+    String representation: dd.mm.yyyy:hh
+    """
 
-    def __init__(self, year: int, month: int = None, day: int = None, hour: int = None, minute: int = None):
+    def __init__(self, year: int, month: int, day: int = None, hour: int = None):
         self._year = year
         self._month = month
         self._day = day
         self._hour = hour
-        self._minute = minute
 
         if not self.is_valid():
             raise ValueError()
@@ -204,31 +211,25 @@ class ComplexDate():
         month = None
         day = None
         hour = None
-        minute = None
         
         try:
-            date, time = str.split(' ')
+            date, time = str.split(':')
         except:
             date = str
             time = None
         
-        if date:
-            ymd = date.split('-')
-            if len(ymd) >= 1:
-                year = int(ymd[0])
-            if len(ymd) >= 2:
-                month = int(ymd[1])
-            if len(ymd) >= 3:
-                day = int(ymd[2])
+        date_list = date.split('.')
+
+        if len(date_list) == 3:
+            day = int(date_list.pop(0))
+        
+        month = int(date_list[0])
+        year = int(date_list[1])
         
         if time:
-            hm = time.split(':')
-            if len(hm) >= 1:
-                hour = int(hm[0])
-            if len(hm) >= 2:
-                minute = int(hm[1])
+            hour = int(time)
 
-        return cls(year, month, day, hour, minute)
+        return cls(year, month, day, hour)
     
 
     def __str__(self):
@@ -244,8 +245,6 @@ class ComplexDate():
             self._day = value
         elif what == 'hour':
             self._hour = value
-        elif what == 'minute':
-            self._minute = value
         
         if not self.is_valid():
             raise ValueError()
@@ -256,40 +255,34 @@ class ComplexDate():
 
 
     def to_string(self) -> str:
-        date_values = [f'{self._year:0>4}']
-        time_str = ''
-        if self._month is not None:
-            date_values.append(f'{self._month:0>2}')
-            if self._day is not None:
-                date_values.append(f'{self._day:0>2}')
-                if self._hour is not None:
-                    time_str += f' {self._hour:0>2}'
-                    if self._minute is not None:
-                        time_str += f':{self._minute:0>2}'
+        result_str = ''
+        if self._day:
+            result_str += f'{self._day:0>2}.'
+        result_str += f'{self._month:0>2}.{self._year:0>4}'
+        if self._hour is not None:
+            result_str += f':{self._hour:0>2}'
 
-        return f'{'-'.join(date_values)}{time_str}'
+        return result_str
     
 
     def to_datetime(self) -> datetime:
         return datetime(
             year=self._year,
-            month=self._month if self._month is not None else 1,
+            month=self._month,
             day=self._day if self._day is not None else 1,
             hour=self._hour if self._hour is not None else 0,
-            minute=self._minute if self._minute is not None else 0
+            tzinfo=TZ_MOSCOW
         )
     
 
     def is_valid(self):
-        if self._year is not None and (self._year < 1 or self._year > 9999):
+        if self._year is None or (self._year < 1 or self._year > 9999):
             return False
-        if self._month is not None and (self._month < 1 or self._month > 12):
+        if self._month is None or (self._month < 1 or self._month > 12):
             return False
         if self._day is not None and (self._day < 1 or self._day > 31):
             return False
         if self._hour is not None and (self._hour < 0 or self._hour > 23):
-            return False
-        if self._minute is not None and (self._minute < 0 or self._minute > 59):
             return False
         
         return True
@@ -333,7 +326,7 @@ class StockEntry(models.Model):
     date_updated = models.DateTimeField(verbose_name='дата обновления')
     previous_uuid = models.UUIDField(null=True, blank=True, verbose_name='UUID предыдущей версии')
     next_uuid = models.UUIDField(null=True, blank=True, verbose_name='UUID следующей версии')
-    entry_number = models.IntegerField(verbose_name='номер записи')
+    entry_number = models.BigIntegerField(verbose_name='номер записи')
 
     product_type = models.IntegerField(choices=PRODUCT_TYPES, verbose_name='тип продукции')
     product_guid = models.UUIDField(null=True, blank=True, verbose_name='продукция (GUID)')
@@ -360,6 +353,31 @@ class StockEntry(models.Model):
 
     origin_country = models.CharField(max_length=255, null=True, blank=True, verbose_name='страна происхождения')
     producer_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='наименование производителя')
+    producer_guid = models.UUIDField(null=True, blank=True, verbose_name='предприятие-производитель (GUID)')
+    producer = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.PROTECT, related_name='produced_entries_set', verbose_name='предприятие-производитель')
+
+    @property
+    def date_produced_display(self):
+        return self.date_produced_1 + ( f' - {self.date_produced_2}' if self.date_produced_2 else '')
+    
+    @property
+    def date_expiry_display(self):
+        return self.date_expiry_1 + ( f' - {self.date_expiry_2}' if self.date_expiry_2 else '')
+    
+    def date_expiry_class(self) -> str:
+        CLASS_VALUES = (
+            (0, 'text-danger'),
+            (7, 'text-warning'),
+        )
+        if not self.volume:
+            return ''
+        date_to_compare = datetime.now(tz=TZ_MOSCOW)
+        delta = self.date_expiry - date_to_compare
+        for val, class_name in CLASS_VALUES:
+            if delta.days <= val:
+                return class_name
+        return ''
+        
 
     def __str__(self):
         return f'{self.entry_number} {self.product_item_name} - {self.volume}'
@@ -367,15 +385,16 @@ class StockEntry(models.Model):
     class Meta:
         verbose_name = 'запись складского журнала'
         verbose_name_plural = 'записи складского журнала'
-        ordering = ['-date_expiry']
+        ordering = ['-date_updated']
 
 
 class PackingType(models.Model):
     guid = models.UUIDField(unique=True)
     uuid = models.UUIDField(unique=True)
-    name = models.CharField(max_length=2, verbose_name='идентификатор')
-    global_id = models.CharField(max_length=255, verbose_name='название')
+    name = models.CharField(max_length=255, verbose_name='название')
+    global_id = models.CharField(max_length=2, verbose_name='идентификатор')
 
+    # TODO implement native get_or_create logic https://docs.djangoproject.com/en/5.2/ref/models/querysets/#get-or-create
     @classmethod
     def get_or_create(cls, guid: str, uuid: str, name: str, global_id: str):
         try:
@@ -408,14 +427,14 @@ class Package(models.Model):
         (6, 'Транспортный уровень'),
     )
 
-    stock_entry = models.ForeignKey(StockEntry, on_delete=models.PROTECT, verbose_name='запись журнала')
+    stock_entry = models.ForeignKey(StockEntry, on_delete=models.CASCADE, verbose_name='запись журнала')
     level = models.IntegerField(choices=LEVEL_CHOICES, verbose_name='уровень')
     packing_type = models.ForeignKey(PackingType, on_delete=models.PROTECT, verbose_name='тип упаковки')
     quantity = models.IntegerField(verbose_name='количество единиц')
     product_marks = models.TextField(blank=True, verbose_name='маркировка')
 
     def __str__(self):
-        return self.name
+        return f'{self.packing_type} {self.quantity}'
 
     class Meta:
         verbose_name = 'упаковка'

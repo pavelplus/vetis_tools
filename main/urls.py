@@ -12,6 +12,7 @@ urlpatterns = [
     path('product-items/', views.product_items, name='product_items'),
     path('product-items/<int:id>', views.product_item_detail, name='product_item_detail'),
     path('stock/', views.stock_entries, name='stock_entries'),
+    path('stock/<int:id>', views.stock_entry_detail, name='stock_entry_detail'),
     path('vetis-task/', views.vetis_task, name='vetis_task'),
     path('task-info/', views.task_info, name='task_info'),
 ]

@@ -2,6 +2,8 @@ from datetime import datetime
 
 from django.template.loader import render_to_string
 
+from ..models import TZ_MOSCOW
+
 
 VETIS_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 
@@ -138,8 +140,8 @@ class GetStockEntryChangesListRequest(AbstractRequest):
 
     def __init__(self, enterprise_guid: str, begin_date: datetime, end_date: datetime, api_key: str, service_id: str, issuer_id: str, initiator_login: str, list_count: int = 1000, list_offset: int = 0):
         self.enterprise_guid = enterprise_guid
-        self.begin_date = begin_date.strftime(VETIS_DATETIME_FORMAT)
-        self.end_date = end_date.strftime(VETIS_DATETIME_FORMAT)
+        self.begin_date = begin_date.astimezone(TZ_MOSCOW).strftime(VETIS_DATETIME_FORMAT)
+        self.end_date = end_date.astimezone(TZ_MOSCOW).strftime(VETIS_DATETIME_FORMAT)
         self.api_key = api_key
         self.service_id = service_id
         self.issuer_id = issuer_id
@@ -154,6 +156,30 @@ class GetStockEntryChangesListRequest(AbstractRequest):
             'vetis_request': self
         }
         return render_to_string('vetis_api/xml/GetStockEntryChangesList.xml', context)
+    
+
+class GetStockEntryVersionListRequest(AbstractRequest):
+
+    endpoint_name = 'ApplicationManagementService'
+    soap_action = 'submitApplicationRequest'
+
+    def __init__(self, enterprise_guid: str, stock_entry_guid: str, api_key: str, service_id: str, issuer_id: str, initiator_login: str, list_count: int = 1000, list_offset: int = 0):
+        self.enterprise_guid = enterprise_guid
+        self.stock_entry_guid = stock_entry_guid
+        self.api_key = api_key
+        self.service_id = service_id
+        self.issuer_id = issuer_id
+        self.initiator_login = initiator_login
+        self.list_count = list_count
+        self.list_offset = list_offset
+    
+    def get_xml(self):
+        self.issue_date = datetime.now().strftime(VETIS_DATETIME_FORMAT)
+        self.local_transaction_id = datetime.now().strftime('%Y%m%d-%H%M%S')
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetStockEntryVersionList.xml', context)
         
 
 class ReceiveApplicationResultRequest(AbstractRequest):

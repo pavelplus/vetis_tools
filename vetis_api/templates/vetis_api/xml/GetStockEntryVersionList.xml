@@ -14,7 +14,7 @@ xmlns:dt="http://api.vetrf.ru/schema/cdm/dictionary/v2">
             <apl:issuerId>{{ vetis_request.issuer_id }}</apl:issuerId>
             <apl:issueDate>{{ vetis_request.issue_date }}</apl:issueDate>
             <apl:data>
-               <merc:getStockEntryChangesListRequest>
+               <merc:getStockEntryVersionListRequest>
          			<merc:localTransactionId>{{ vetis_request.local_transaction_id }}</merc:localTransactionId>
          			<merc:initiator>
          				<vd:login>{{ vetis_request.initiator_login }}</vd:login>
@@ -23,12 +23,9 @@ xmlns:dt="http://api.vetrf.ru/schema/cdm/dictionary/v2">
             			<bs:count>{{ vetis_request.list_count }}</bs:count>
             			<bs:offset>{{ vetis_request.list_offset }}</bs:offset>
          			</bs:listOptions>
-                  <bs:updateDateInterval>
-             			<bs:beginDate>{{ vetis_request.begin_date }}</bs:beginDate>
-              			<bs:endDate>{{ vetis_request.end_date }}</bs:endDate>
-                  </bs:updateDateInterval>
+                  <bs:guid>{{ vetis_request.stock_entry_guid }}</bs:guid>
          			<dt:enterpriseGuid>{{ vetis_request.enterprise_guid }}</dt:enterpriseGuid>
-         		</merc:getStockEntryChangesListRequest>
+         		</merc:getStockEntryVersionListRequest>
             </apl:data>
          </apl:application>
       </apldef:submitApplicationRequest>

@@ -1,4 +1,5 @@
 from celery.result import AsyncResult
+from datetime import datetime, timezone, time
 
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -7,8 +8,15 @@ from django.template.response import TemplateResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
-from vetis_api.models import BusinessEntity, Enterprise, ProductItem, StockEntry
-from vetis_api.tasks import test_task, reload_enterprises, reload_product_items, reload_product_subproduct, update_stock_entries
+from vetis_api.models import BusinessEntity, Enterprise, ProductItem, StockEntry, TZ_MOSCOW
+from vetis_api.tasks import (
+    test_task,
+    reload_enterprises,
+    reload_product_items,
+    reload_product_subproduct,
+    update_stock_entries,
+    update_stock_entry_history
+    )
 from .util import build_url
 from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm
 
@@ -70,7 +78,7 @@ def business_entities(request):
 
 
 def business_entity_detail(request, id):
-    business_entity = get_object_or_404(BusinessEntity, pk=id)
+    business_entity = get_object_or_404(BusinessEntity, id=id)
     context = {
         'business_entity': business_entity,
     }
@@ -82,12 +90,11 @@ def product_items(request):
     product_items = ProductItem.objects.none()
 
     if request.method == 'POST':
-        product_items = ProductItem.objects.all()
         form = ProductItemsFilterForm(request.POST)
         if form.is_valid():
+            product_items = ProductItem.objects.all()
             if form.cleaned_data['business_entity']:
                 product_items = product_items.filter(producer=form.cleaned_data['business_entity'])
-
             if form.cleaned_data['search_query']:
                 product_items = product_items.filter(name__icontains=form.cleaned_data['search_query'])
     else:
@@ -116,19 +123,79 @@ def stock_entries(request):
     if not ent_id:
         messages.add_message(request, messages.WARNING, 'Не выбрано активное предприятие!')
         return redirect('main:select_workspace')
+    
+    enterprise = get_object_or_404(Enterprise, id=ent_id)
+
+    last_updated_entry = StockEntry.objects.filter(enterprise=enterprise).order_by('-date_updated').first()
+    if last_updated_entry is not None:
+        print(last_updated_entry.date_updated)
+        entries_last_updated = last_updated_entry.date_updated.astimezone(TZ_MOSCOW).strftime('%d.%m.%Y %H:%M:%S')
+    else:
+        entries_last_updated = None
+
+    if enterprise.stock_entries_last_updated:
+        stock_last_updated = enterprise.stock_entries_last_updated.astimezone(TZ_MOSCOW).strftime('%d.%m.%Y %H:%M:%S')
+    else:
+        stock_last_updated = None
+
+    has_collapsed_filters = False
 
     stock_entries = StockEntry.objects.none()
     if request.method == 'POST':
-        pass
+        form = StockEntriesFilterForm(request.POST)
+        if form.is_valid():
+            stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True)
+            if form.cleaned_data['product']:
+                stock_entries = stock_entries.filter(product= form.cleaned_data['product'])
+            if form.cleaned_data['search_query']:
+                for query in form.cleaned_data['search_query'].split(' '):
+                    if query[0] == '-':
+                        stock_entries = stock_entries.exclude(product_item_name__icontains=query[1:])
+                    else:
+                        stock_entries = stock_entries.filter(product_item_name__icontains=query)
+            if form.cleaned_data['has_quantity']:
+                stock_entries = stock_entries.filter(volume__gt=0)
+            if form.cleaned_data['date_produced_begin']:
+                # date_produced_begin = timezone.make_aware(form.cleaned_data['date_produced_begin'], timezone=TZ_MOSCOW)
+                date_produced_begin = datetime.combine(form.cleaned_data['date_produced_begin'], time(hour=0), tzinfo=TZ_MOSCOW)
+                print(f'date_produced_begin {date_produced_begin}')
+                stock_entries = stock_entries.filter(date_produced__gte=date_produced_begin)
+                has_collapsed_filters = True
+            if form.cleaned_data['date_produced_end']:
+                # date_produced_end = timezone.make_aware(form.cleaned_data['date_produced_end'], timezone=TZ_MOSCOW)
+                date_produced_end = datetime.combine(form.cleaned_data['date_produced_end'], time(hour=23, minute=59, second=59), tzinfo=TZ_MOSCOW)
+                print(f'date_produced_end {date_produced_end}')
+                stock_entries = stock_entries.filter(date_produced__lte=date_produced_end)
+                has_collapsed_filters = True
+
+            stock_entries = stock_entries.order_by('date_expiry', '-entry_number')[:1000]
+
     else:
         form = StockEntriesFilterForm()
 
+    date_to_compare = datetime.now()
+
     context = {
         'form': form,
+        'entries_last_updated': entries_last_updated,
+        'stock_last_updated': stock_last_updated,
+        'date_to_compare': date_to_compare,
         'stock_entries': stock_entries,
+        'btn_filters_class': 'btn-warning' if has_collapsed_filters else 'btn-secondary',
     }
     return TemplateResponse(request, 'main/stock_entries.html', context=context)
 
+
+def stock_entry_detail(request, id):
+    stock_entry = get_object_or_404(StockEntry, id=id)
+
+    stock_entry_history = StockEntry.objects.filter(guid=stock_entry.guid).order_by('date_created')
+
+    context = {
+        'stock_entry': stock_entry,
+        'stock_entry_history': stock_entry_history,
+    }
+    return TemplateResponse(request, 'main/stock_entry_detail.html', context=context)
 
 
 # htmx partial render
@@ -169,6 +236,9 @@ def vetis_task(request):
         if vetis_task == 'test_task':
             task_id = test_task.delay()
             return redirect(build_url('main:vetis_task', task_id=task_id))
+        
+        if not request.user.vetis_login:
+            messages.add_message(request, messages.ERROR, 'Для пользователя не задан логин Ветис!')
 
         if credentials_id:
             if vetis_task == 'reload_enterprises':
@@ -187,16 +257,22 @@ def vetis_task(request):
                 next = reverse('main:product_items')
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
             
-            if vetis_task == 'update_stock_entries':
-                if request.user.vetis_login:
-                    task_id = update_stock_entries.delay(credentials_id, request.user.vetis_login, ent_id)
-                    next = reverse('main:product_items')
-                    return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
-                else:
-                    messages.add_message(request, messages.ERROR, 'Для пользователя не задан логин Ветис!')
+            if vetis_task == 'update_stock_entries' and request.user.vetis_login:
+                task_id = update_stock_entries.delay(credentials_id, request.user.vetis_login, ent_id)
+                next = reverse('main:stock_entries')
+                return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
+
+            if vetis_task == 'reload_stock_entry_history' and request.user.vetis_login:
+                stock_entry_id = int(request.POST.get('stock_entry_id'))
+                task_id = update_stock_entry_history.delay(credentials_id, request.user.vetis_login, stock_entry_id)
+                next = reverse('main:stock_entry_detail', kwargs={'id': stock_entry_id})
+                return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
 
         else:
             messages.add_message(request, messages.ERROR, 'Не выбрано подключение!')
+
+        messages.add_message(request, messages.ERROR, 'Запрос не обработан!')
+        return redirect('.')
         
     # display task info
     context = {}
