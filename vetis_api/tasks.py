@@ -62,15 +62,15 @@ def send_soap_request(soap_request: AbstractRequest, credentials: VetisCredentia
         else:
             break
 
+    if response is None:
+        raise RuntimeError('Не удалось установить соединение для отправки soap запроса')
+
     record = ApiRequestsHistoryRecord()
     record.soap_action = soap_request.soap_action
     record.soap_request = soap_request.get_xml()
     record.comment = f'{credentials.name} {endpoint_url}'
-    if response is not None:
-        record.response_status_code = response.status_code
-        record.response_body = response.text
-    else:
-        record.response_status_code = 0
+    record.response_status_code = response.status_code
+    record.response_body = response.text
     record.save()
     
     return response
@@ -82,11 +82,8 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
 
     response = send_soap_request(soap_request, credentials)
 
-    if response is None:
-        return {'result': 'error', 'message': 'Ошибка соединения'}
-
     if response.status_code != 200:
-        return {'result': 'error', 'message': f'Ошибка запроса ({response.status_code}): {response.reason}'}
+        raise RuntimeError(f'Ошибка запроса ({response.status_code}): {response.reason}')
 
     result_xml = ET.fromstring(response.text)
 
@@ -97,11 +94,13 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
     print(f'Status: {status}')
 
     if status != 'ACCEPTED':
-        return {'result': 'error', 'message': f'Ошибка обработки запроса ({status})'}
+        raise RuntimeError(f'Ошибка обработки запроса ({status})')
     
     application_id = response_xml.find('apl:application/apl:applicationId', NAMESPACES).text
 
     application_result_request = ReceiveApplicationResultRequest(api_key=credentials.api_key, issuer_id=credentials.issuer_id, application_id=application_id)
+
+    status = '---'
 
     for try_num in range(4):
         sleep(5 + try_num*10)
@@ -110,11 +109,8 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
         
         response = send_soap_request(application_result_request, credentials)
 
-        if response is None:
-            return {'result': 'error', 'message': 'Ошибка соединения'}
-
         if response.status_code != 200:
-            return {'result': 'error', 'message': f'Ошибка запроса при ожидании двухэтапного ответа ({response.status_code}): {response.reason}'}
+            raise RuntimeError(f'Ошибка запроса при ожидании двухэтапного ответа ({response.status_code}): {response.reason}')
         
         result_xml = ET.fromstring(response.text)
 
@@ -125,11 +121,11 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
         print(f'Status: {status}')
 
         if status == 'COMPLETED':
-            return {'result': 'success', 'response': response}
+            return response
         elif status == 'REJECTED':
-            return {'result': 'error', 'message': 'Запрос отклонен (REJECTED)'}
+            raise RuntimeError('Запрос отклонен (REJECTED)')
 
-    return {'result': 'error', 'message': 'Таймаут ожидания результата обработки'}
+    raise RuntimeError(f'Таймаут ожидания результата обработки. Последний полученный статус запроса: {status}')
 
 
 @shared_task(bind=True)
@@ -139,8 +135,8 @@ def test_task(this_task):
         print(f'Processing {i+1}...')
         sleep(1.0)
     print('Task done.')
-    raise RuntimeError("Error example")
-    return {'result': 'success', 'message': 'Тестовая задача завершена успешно.'}
+    # raise RuntimeError("Error example")
+    return 'Тестовая задача завершена успешно'
 
 
 @shared_task
@@ -148,12 +144,12 @@ def reload_enterprises(credentials_id: int, business_entity_id: int):
     try:
         business_entity = BusinessEntity.objects.get(id=business_entity_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Хозяйствующий субъект не найден!'}
+        raise RuntimeError('Хозяйствующий субъект не найден!')
     
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Не обнаружены параметры подключения!'}
+        raise RuntimeError('Не обнаружены параметры подключения!')
     
     list_count = 1000
     list_offset = 0
@@ -168,11 +164,8 @@ def reload_enterprises(credentials_id: int, business_entity_id: int):
 
             response = send_soap_request(soap_request, credentials)
 
-            if response is None:
-                return {'result': 'error', 'message': 'Ошибка соединения'}
-
             if response.status_code != 200:
-                return {'result': 'error', 'message': f'Ошибка запроса ({response.status_code}): {response.reason}'}
+                raise RuntimeError(f'Ошибка запроса ({response.status_code}): {response.reason}')
             
             result_xml = ET.fromstring(response.text)
 
@@ -211,7 +204,7 @@ def reload_enterprises(credentials_id: int, business_entity_id: int):
         # /while
     # /transaction.atomic
     
-    return {'result': 'success', 'message': 'Предприятия хозяйствующего субъекта успешно обновлены.'}
+    return 'Предприятия хозяйствующего субъекта успешно обновлены.'
 
 
 def get_or_load_product_by_guid(credentials: VetisCredentials, product_guid: str, update: bool = False) -> Product:
@@ -412,7 +405,7 @@ def reload_product_subproduct(credentials_id: int):
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Не обнаружены параметры подключения!'}
+        raise RuntimeError('Не обнаружены параметры подключения!')
 
     for product in Product.objects.all():
         get_or_load_product_by_guid(credentials=credentials, product_guid=product.guid, update=True)
@@ -420,7 +413,7 @@ def reload_product_subproduct(credentials_id: int):
     for subproduct in SubProduct.objects.all():
         get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=subproduct.guid, update=True)
 
-    return {'result': 'success', 'message': 'Списки продукция и вид продукции обновлены.'}
+    return 'Списки продукция и вид продукции обновлены.'
 
 
 @shared_task
@@ -428,12 +421,12 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
     try:
         business_entity = BusinessEntity.objects.get(id=business_entity_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Хозяйствующий субъект не найден!'}
+        raise RuntimeError('Хозяйствующий субъект не найден!')
     
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Не обнаружены параметры подключения!'}
+        raise RuntimeError('Не обнаружены параметры подключения!')
     
     list_count = 1000
     list_offset = 0
@@ -450,11 +443,8 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
 
             response = send_soap_request(soap_request, credentials)
 
-            if response is None:
-                return {'result': 'error', 'message': 'Ошибка соединения'}
-
             if response.status_code != 200:
-                return {'result': 'error', 'message': f'Ошибка запроса ({response.status_code}): {response.reason}'}
+                raise RuntimeError(f'Ошибка запроса ({response.status_code}): {response.reason}')
             
             result_xml = ET.fromstring(response.text)
 
@@ -529,7 +519,7 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
         product_item.subproduct = subproduct
         product_item.save()
 
-    return {'result': 'success', 'message': f'Список продукции обновлен. Всего: {total}'}
+    return f'Список продукции обновлен. Всего: {total}'
 
 
 def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, stock_entry_xml: ET.Element, credentials: VetisCredentials):
@@ -735,12 +725,12 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
     try:
         enterprise = Enterprise.objects.get(id=enterprise_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Предприятие не найдено!'}
+        raise RuntimeError('Предприятие не найдено!')
     
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Не обнаружены параметры подключения!'}
+        raise RuntimeError('Не обнаружены параметры подключения!')
     
     # last_updated_entry = StockEntry.objects.filter(enterprise=enterprise).order_by('-date_updated').first()
 
@@ -784,16 +774,9 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                     list_offset=list_offset
                 )
 
-            result = send_2step_soap_request(soap_request, credentials)
-
-            if result['result'] != 'success':
-                return result
-            
-            response = result['response']
+            response = send_2step_soap_request(soap_request, credentials)
 
             result_xml = ET.fromstring(response.text)
-            
-            # return {'result': 'error', 'message': 'Aborted.'}
 
             if update_mode == 'INITIAL':
                 response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryListResponse/vd:stockEntryList', NAMESPACES)
@@ -829,7 +812,7 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
 
     # /transaction.atomic   
 
-    return {'result': 'success', 'message': f'Складские записи для предприятия успешно обновлены. Всего: {total}'}
+    return f'Складские записи для предприятия успешно обновлены. Всего: {total}'
 
 
 @shared_task
@@ -837,21 +820,21 @@ def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_
     try:
         stock_entry = StockEntry.objects.get(id=stock_entry_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Запись журнала не найдена!'}
+        raise RuntimeError('Запись журнала не найдена!')
     
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        return {'result': 'error', 'message': 'Не обнаружены параметры подключения!'}
+        raise RuntimeError('Не обнаружены параметры подключения!')
     
     enterprise = stock_entry.enterprise
 
     # business_entity = BusinessEntity.objects.filter(credentials=credentials, id=enterprise.business_entity.id).first()
     # if business_entity is None:
-    #     return {'result': 'error', 'message': 'Запись журнала не принадлежит текущему хозяйственному субъекту!'}
+    #     raise RuntimeError('Запись журнала не принадлежит текущему хозяйственному субъекту!')
     
     if enterprise.business_entity.credentials != credentials:
-        return {'result': 'error', 'message': 'Запись журнала не принадлежит текущему хозяйственному субъекту!'}
+        raise RuntimeError('Запись журнала не принадлежит текущему хозяйственному субъекту')
     
     list_count = 1000
     list_offset = 0
@@ -871,12 +854,7 @@ def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_
                 list_offset=list_offset
             )
 
-            result = send_2step_soap_request(soap_request, credentials)
-
-            if result['result'] != 'success':
-                return result
-            
-            response = result['response']
+            response = send_2step_soap_request(soap_request, credentials)
 
             result_xml = ET.fromstring(response.text)
 
@@ -909,4 +887,4 @@ def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_
         # /while
     # /transaction.atomic   
 
-    return {'result': 'success', 'message': f'История для записи журнала успешно обновлена. Всего: {total}'}
+    return f'История для записи журнала успешно обновлена. Всего: {total}'

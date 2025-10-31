@@ -254,11 +254,10 @@ def task_info(request):
     
     context = {}
     if task_result:
-        context['task_info'] = {
+        context = {
             'task_id': task_id,
-            'state': task_result.state,
-            'ready': task_result.ready(),
-            'result': task_result.result,
+            'task_ready': task_result.ready(),
+            'task_result': task_result,
             'tick': ('.'*10)[:datetime.now().second%10+1] if not task_result.ready() else '',
         }
 

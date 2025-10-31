@@ -19,12 +19,12 @@
           <tbody>
       {% endif %}
       {% ifchanged stock_entry.date_expiry_group %}
-            <tr class="bg-body-secondary">
-              <td>&nbsp;</td>
-              <td class="{{ stock_entry.date_expiry_class }} fw-bold"><i class="bi bi-calendar-check"></i> {{ stock_entry.date_expiry_group }}</td>
-              <td>&nbsp;</td>
-              <td>&nbsp;</td>
-              <td>&nbsp;</td>
+            <tr>
+              <th scope="col">&nbsp;</td>
+              <th scope="col" class="{{ stock_entry.date_expiry_class }}"><i class="bi bi-calendar-check"></i> {{ stock_entry.date_expiry_group }}</td>
+              <th scope="col">&nbsp;</td>
+              <th scope="col">&nbsp;</td>
+              <th scope="col">&nbsp;</td>
             </tr>
       {% endifchanged %}
       {% with show_enterprise_name=True %}
