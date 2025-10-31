@@ -4,25 +4,12 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import xml.etree.ElementTree as ET
 
-from celery import shared_task
+from celery import shared_task, states
 
 from django.core.exceptions import ObjectDoesNotExist, BadRequest
 from django.db import transaction
 
-from .models import (
-    BusinessEntity,
-    ApiRequestsHistoryRecord,
-    VetisCredentials,
-    Enterprise,
-    ProductItem,
-    Product,
-    SubProduct,
-    StockEntry,
-    Unit,
-    ComplexDate,
-    Package,
-    PackingType
-    )
+from .models import *
 from .xml.build_xml import *
 from .xml.settings import NAMESPACES
 
@@ -116,7 +103,7 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
 
     application_result_request = ReceiveApplicationResultRequest(api_key=credentials.api_key, issuer_id=credentials.issuer_id, application_id=application_id)
 
-    for try_num in range(3):
+    for try_num in range(4):
         sleep(5 + try_num*10)
 
         print(f'Receiving result... Try #{try_num}')
@@ -145,12 +132,14 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
     return {'result': 'error', 'message': 'Таймаут ожидания результата обработки'}
 
 
-@shared_task
-def test_task():
+@shared_task(bind=True)
+def test_task(this_task):
     for i in range(0, 5):
+        this_task.update_state(state='PROGRESS', meta={'info': 'bla-bla-bla'})
         print(f'Processing {i+1}...')
         sleep(1.0)
     print('Task done.')
+    raise RuntimeError("Error example")
     return {'result': 'success', 'message': 'Тестовая задача завершена успешно.'}
 
 
@@ -728,6 +717,14 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
             package.product_marks = ' '.join(marks)
 
         package.save()
+    
+    stock_entry.stockentryvetdocument_set.all().delete()
+
+    for vet_document_uuid_xml in stock_entry_xml.findall('vd:vetDocument/bs:uuid', NAMESPACES):
+        vet_document = StockEntryVetDocument()
+        vet_document.stock_entry = stock_entry
+        vet_document.uuid = vet_document_uuid_xml.text
+        vet_document.save()
 
     # / for package
 
@@ -816,199 +813,10 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                     credentials=credentials
                     )
                 
-                '''
-                # enterprise
-                # guid
-                # uuid
-                # is_active
-                # is_last
-                # status
-                # date_created
-                # date_updated
-                # previous_uuid
-                # next_uuid
-                # entry_number
-
-                stock_entry.enterprise = enterprise
-                stock_entry.guid = stock_entry_xml.find('bs:guid', NAMESPACES).text
-                stock_entry.uuid = stock_entry_xml.find('bs:uuid', NAMESPACES).text
-                stock_entry.is_active = stock_entry_xml.find('bs:active', NAMESPACES).text == 'true'
-                stock_entry.is_last = stock_entry_xml.find('bs:last', NAMESPACES).text == 'true'
-                stock_entry.status = int(stock_entry_xml.find('bs:status', NAMESPACES).text)
-                stock_entry.date_created = datetime.fromisoformat(stock_entry_xml.find('bs:createDate', NAMESPACES).text)
-                stock_entry.date_updated = datetime.fromisoformat(stock_entry_xml.find('bs:updateDate', NAMESPACES).text)
-                previous_uuid_xml = stock_entry_xml.find('bs:previous', NAMESPACES)
-                if previous_uuid_xml is not None:
-                    stock_entry.previous_uuid = previous_uuid_xml.text
-                next_uuid_xml = stock_entry_xml.find('bs:next', NAMESPACES)
-                if next_uuid_xml is not None:
-                    stock_entry.next_uuid = next_uuid_xml.text
-                stock_entry.entry_number = stock_entry_xml.find('vd:entryNumber', NAMESPACES).text
-
-                batch_xml = stock_entry_xml.find('vd:batch', NAMESPACES)
-                
-                # product_type
-                # product_guid
-                # product
-                # subproduct_guid
-                # subproduct
-
-                stock_entry.product_type = int(batch_xml.find('vd:productType', NAMESPACES).text)
-                stock_entry.product_guid = batch_xml.find('vd:product/bs:guid', NAMESPACES).text
-                stock_entry.product = get_or_load_product_by_guid(credentials=credentials, product_guid=stock_entry.product_guid)
-                stock_entry.subproduct_guid = batch_xml.find('vd:subProduct/bs:guid', NAMESPACES).text
-                stock_entry.subproduct = get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=stock_entry.subproduct_guid)
-                
-                # product_item_guid
-                # product_item_name
-                # product_item
-
-                stock_entry.product_item_name = batch_xml.find('vd:productItem/dt:name', NAMESPACES).text
-                product_item_guid_xml = batch_xml.find('vd:productItem/bs:guid', NAMESPACES)
-                if product_item_guid_xml is not None:
-                    stock_entry.product_item_guid = product_item_guid_xml.text
-                    stock_entry.product_item = get_or_load_product_item_by_guid(credentials=credentials, product_item_guid=stock_entry.product_item_guid)
-
-                # volume
-
-                stock_entry.volume = Decimal(batch_xml.find('vd:volume', NAMESPACES).text)
-
-                # unit
-                
-                unit_guid = batch_xml.find('vd:unit/bs:guid', NAMESPACES).text
-                unit_name = batch_xml.find('vd:unit/dt:name', NAMESPACES).text
-
-                stock_entry.unit = Unit.get_or_create(guid=unit_guid, name=unit_name)
-                
-                # date_produced_1
-                # date_produced_2
-                # date_produced
-
-                date_produced_1_xml = batch_xml.find('vd:dateOfProduction/vd:firstDate', NAMESPACES)
-                year = int(date_produced_1_xml.find('dt:year', NAMESPACES).text)
-                month = int(date_produced_1_xml.find('dt:month', NAMESPACES).text)
-                date_produced_1 = ComplexDate(year=year, month=month)
-                day_xml = date_produced_1_xml.find('dt:day', NAMESPACES)
-                if day_xml is not None:
-                    date_produced_1.update('day', int(day_xml.text))
-                    hour_xml = date_produced_1_xml.find('dt:hour', NAMESPACES)
-                    if hour_xml is not None:
-                        date_produced_1.update('hour', int(hour_xml.text))
-                stock_entry.date_produced_1 = date_produced_1.to_string()
-
-                stock_entry.date_produced = date_produced_1.to_datetime()
-
-                date_produced_2_xml = batch_xml.find('vd:dateOfProduction/vd:secondDate', NAMESPACES)
-                if date_produced_2_xml is not None:
-                    year = int(date_produced_2_xml.find('dt:year', NAMESPACES).text)
-                    month = int(date_produced_2_xml.find('dt:month', NAMESPACES).text)
-                    date_produced_2 = ComplexDate(year=year, month=month)
-                    day_xml = date_produced_2_xml.find('dt:day', NAMESPACES)
-                    if day_xml is not None:
-                        date_produced_2.update('day', int(day_xml.text))
-                        hour_xml = date_produced_2_xml.find('dt:hour', NAMESPACES)
-                        if hour_xml is not None:
-                            date_produced_2.update('hour', int(hour_xml.text))
-                    stock_entry.date_produced_2 = date_produced_2.to_string()
-
-                # date_expiry_1
-                # date_expiry_2
-                # date_expiry
-
-                date_expiry_1_xml = batch_xml.find('vd:expiryDate/vd:firstDate', NAMESPACES)
-                year = int(date_expiry_1_xml.find('dt:year', NAMESPACES).text)
-                month = int(date_expiry_1_xml.find('dt:month', NAMESPACES).text)
-                date_expiry_1 = ComplexDate(year=year, month=month)
-                day_xml = date_expiry_1_xml.find('dt:day', NAMESPACES)
-                if day_xml is not None:
-                    date_expiry_1.update('day', int(day_xml.text))
-                    hour_xml = date_expiry_1_xml.find('dt:hour', NAMESPACES)
-                    if hour_xml is not None:
-                        date_expiry_1.update('hour', int(hour_xml.text))
-                stock_entry.date_expiry_1 = date_expiry_1.to_string()
-
-                stock_entry.date_expiry = date_expiry_1.to_datetime()
-
-                date_expiry_2_xml = batch_xml.find('vd:expiryDate/vd:secondDate', NAMESPACES)
-                if date_expiry_2_xml is not None:
-                    year = int(date_expiry_2_xml.find('dt:year', NAMESPACES).text)
-                    month = int(date_expiry_2_xml.find('dt:month', NAMESPACES).text)
-                    date_expiry_2 = ComplexDate(year=year, month=month)
-                    day_xml = date_expiry_2_xml.find('dt:day', NAMESPACES)
-                    if day_xml is not None:
-                        date_expiry_2.update('day', int(day_xml.text))
-                        hour_xml = date_expiry_2_xml.find('dt:hour', NAMESPACES)
-                        if hour_xml is not None:
-                            date_expiry_2.update('hour', int(hour_xml.text))
-                    stock_entry.date_expiry_2 = date_expiry_2.to_string()
-
-                # is_perishable
-
-                stock_entry.is_perishable = batch_xml.find('vd:perishable', NAMESPACES).text == 'true'
-
-                # origin_country
-                # producer_name
-                
-                origin_country_xml = batch_xml.find('vd:origin/vd:country/dt:name', NAMESPACES)
-                if origin_country_xml is not None:
-                    stock_entry.origin_country = origin_country_xml.text
-
-                producer_name_xml = batch_xml.find('vd:origin/vd:producer/dt:enterprise/dt:name', NAMESPACES)
-                if producer_name_xml is not None:
-                    stock_entry.producer_name = producer_name_xml.text
-
-                producer_guid_xml = batch_xml.find('vd:origin/vd:producer/dt:enterprise/bs:guid', NAMESPACES)
-                if producer_guid_xml is not None:
-                    stock_entry.producer_guid = producer_guid_xml.text
-                    try:
-                        producer = Enterprise.objects.get(guid=stock_entry.producer_guid)
-                        stock_entry.producer = producer
-                    except ObjectDoesNotExist:
-                        pass
-
-                stock_entry.save()
-
-                # packages
-
-                stock_entry.package_set.all().delete()
-
-                for package_xml in batch_xml.findall('vd:packageList/dt:package', NAMESPACES):
-
-                    package = Package()
-                    package.stock_entry = stock_entry
-                    package.level = int(package_xml.find('dt:level', NAMESPACES).text)
-                    packing_type_guid = package_xml.find('dt:packingType/bs:guid', NAMESPACES).text
-                    packing_type_uuid = package_xml.find('dt:packingType/bs:uuid', NAMESPACES).text
-                    packing_type_name = package_xml.find('dt:packingType/dt:name', NAMESPACES).text
-                    packing_type_glodal_id = package_xml.find('dt:packingType/dt:globalID', NAMESPACES).text
-                    package.packing_type = PackingType.get_or_create(
-                        guid=packing_type_guid,
-                        uuid=packing_type_uuid,
-                        name=packing_type_name,
-                        global_id=packing_type_glodal_id
-                    )
-                    quantity_xml = package_xml.find('dt:quantity', NAMESPACES)
-                    if quantity_xml is not None:
-                        package.quantity = int(quantity_xml.text)
-                    else:
-                        package.quantity = 0
-                    
-                    marks = []
-                    for marks_xml in package_xml.findall('dt:productMarks', NAMESPACES):
-                        marks.append(marks_xml.text)
-                    if marks:
-                        package.product_marks = ' '.join(marks)
-
-                    package.save()
-
-                # / for package'''
-
             # / for main
 
             total = int(response_xml.get('total'))
 
-            print(f'Stock entry total: {total}')
-            
             if total > list_offset + list_count:
                 list_offset += list_count
                 sleep(1.0)
@@ -1023,6 +831,7 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
 
     return {'result': 'success', 'message': f'Складские записи для предприятия успешно обновлены. Всего: {total}'}
 
+
 @shared_task
 def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_entry_id: int):
     try:
@@ -1036,6 +845,13 @@ def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_
         return {'result': 'error', 'message': 'Не обнаружены параметры подключения!'}
     
     enterprise = stock_entry.enterprise
+
+    # business_entity = BusinessEntity.objects.filter(credentials=credentials, id=enterprise.business_entity.id).first()
+    # if business_entity is None:
+    #     return {'result': 'error', 'message': 'Запись журнала не принадлежит текущему хозяйственному субъекту!'}
+    
+    if enterprise.business_entity.credentials != credentials:
+        return {'result': 'error', 'message': 'Запись журнала не принадлежит текущему хозяйственному субъекту!'}
     
     list_count = 1000
     list_offset = 0

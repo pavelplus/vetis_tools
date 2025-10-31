@@ -1,6 +1,28 @@
-<div class="alert alert-info mt-3" role="alert">Статус задачи {{ task_info.task_id }}: {{ task_info.state }}</div>
+<div class="alert alert-info mt-3">
+  {% if task_info.ready %}
+    <i class="bi bi-check-lg"></i>
+  {% else %}
+    <i class="bi bi-hourglass-split"></i>
+  {% endif %}
+  Статус задачи {{ task_info.task_id }}: {{ task_info.state }}{{ task_info.tick }}
+</div>
+{% if task_info.state == 'PROGRESS' %}
+  <div class="alert alert-info mt-3">{{ task_info.result.info }}</div>
+{% endif %}
 {% if task_info.ready %}
-  <div class="alert alert-info mt-3" role="alert">{{ task_info.result.result }}: {{ task_info.result.message }}</div>
+  {% if task_info.result.result %}{% endif %}
+    {% if task_info.result.result == 'success' %}
+      <div class="alert alert-success mt-3">
+    {% elif task_info.result.result == 'error' %}
+      <div class="alert alert-danger mt-3">
+    {% else %}
+      <div class="alert alert-info mt-3">
+    {% endif %}
+    {{ task_info.result.result }}: {{ task_info.result.message }}
+    </div>
+  {% else %}
+    <div class="alert alert-info mt-3">{{ task_info.result }}</div>
+  {% endif %}
 {% else %}
   <div class="row text-center">
     <i class="bi bi-hourglass-split" style="font-size: 3rem;"></i>

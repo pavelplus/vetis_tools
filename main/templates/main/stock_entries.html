@@ -37,8 +37,10 @@
     </div>
     <div class="collapse" id="collapseFilter">
       <div class="row mt-3">
-        {% bootstrap_field form.date_produced_begin wrapper_class='col-lg-3 mb-3 mb-lg-0' %}
-        {% bootstrap_field form.date_produced_end wrapper_class='col-lg-3 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.date_produced_begin wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.date_produced_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.date_created_begin wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.date_created_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
       </div>
     </div>
   </form>
@@ -57,19 +59,9 @@
         </thead>
         <tbody>
     {% endif %}
-          <tr>
-            <td><a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:stock_entry_detail' stock_entry.id %}">{{ stock_entry.entry_number }}</a></td>
-            <td class="{{ stock_entry.volume|yesno:',text-secondary-emphasis' }}">{{ stock_entry.product_item_name }}</td>
-            <td><small>{{ stock_entry.date_produced_display }}</small></td>
-            <td><small class="{{ stock_entry.date_expiry_class }}">{{ stock_entry.date_expiry_display }}</small></td>
-            <td>
-              {% if stock_entry.volume %}
-                {{ stock_entry.volume|floatformat }}&nbsp;{{ stock_entry.unit }}
-              {% else %}
-                <i class="bi bi-dash"></i>
-              {% endif %}
-            </td>
-          </tr>
+    {% with show_origin_info=True %}
+      {% include "main/includes/stock_entry_table_row.html" %}
+    {% endwith %}
     {% if forloop.last %}
         </tbody>
       </table>

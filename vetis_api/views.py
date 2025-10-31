@@ -50,6 +50,7 @@ def task_info(request):
     if request.GET.get('task_id'):
         task_id = request.GET.get('task_id')
         res = AsyncResult(task_id)
+        
         context['task_info'] = {
             'task_id': task_id,
             'state': res.state,

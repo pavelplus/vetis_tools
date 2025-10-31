@@ -6,6 +6,13 @@
   <table class="table">
     <tbody>
       <tr>
+        <th scope="row">Предприятие</th>
+        <td>
+          {{ stock_entry.enterprise }}
+          <a href="{% url 'main:business_entity_detail' stock_entry.enterprise.business_entity.id %}" title="Карточка хозяйствующего субъекта"><i class="bi bi-box-arrow-up-right"></i></a>
+        </td>
+      </tr>
+      <tr>
         <th scope="row">Номер записи</th>
         <td>
           {{ stock_entry.entry_number }}
@@ -27,13 +34,6 @@
         </td>
       </tr>
       <tr>
-        <th scope="row">Предприятие</th>
-        <td>
-          {{ stock_entry.enterprise }}
-          <a href="{% url 'main:business_entity_detail' stock_entry.enterprise.business_entity.id %}" title="Карточка хозяйствующего субъекта"><i class="bi bi-box-arrow-up-right"></i></a>
-        </td>
-      </tr>
-      <tr>
         <th scope="row">Продукция</th>
         <td>
           <p class="text-secondary my-0">
@@ -52,7 +52,7 @@
       <tr>
         <th scope="row">Остаток</th>
         <td>
-          <p class="fw-bold my-0">{{ stock_entry.volume|floatformat }}&nbsp;{{ stock_entry.unit }}</p>
+          <p class="fw-bold my-0">{{ stock_entry.volume.normalize }}&nbsp;{{ stock_entry.unit }}</p>
         </td>
       </tr>
       <tr>
@@ -96,6 +96,35 @@
           </td>
         </tr>
       {% endif %}
+      {% if stock_entry.stockentryvetdocument_set.count %}
+        <tr>
+          <th scope="row">Вет. документы</th>
+          <td>
+            {% for vet_document in stock_entry.stockentryvetdocument_set.all %}
+              <p class="my-0"><a target="_blank" href="https://mercury.vetrf.ru/pub/operatorui?_action=findVetDocumentFormByUuid&uuid={{ vet_document.get_formatted_uuid }}">{{ vet_document.get_formatted_uuid }}</a></p>
+            {% endfor %}
+          </td>
+        </tr>
+      {% endif %}
+      <tr>
+        <th scope="row">
+          Комментарий
+        </th>
+        <td>
+          {% if comment.important %}<i class="bi bi-exclamation-square-fill text-warning"></i>{% endif %}
+          {{ comment.text }}
+          <a class="" data-bs-toggle="collapse" href="#collapseFilter" title="Изменить"><i class="bi bi-pencil-square"></i></a>
+          <div class="collapse" id="collapseFilter">
+            {% load django_bootstrap5 %}
+            <form class="mt-3 form" method="POST">
+              {% csrf_token %}
+              {% bootstrap_field comment_form.text show_label='skip' %}
+              {% bootstrap_field comment_form.important %}
+              <button class="btn btn-primary" name="save_comment" type="submit">Сохранить</button>
+            </form>
+          </div>
+        </td>
+      </tr>
       <tr style="font-size: 75%">
         <th scope="row" class="text-secondary">Служебные</th>
         <td class="text-secondary">
@@ -145,7 +174,7 @@
           <td>{{ se.date_created }}</td>
           <td>{{ se.date_updated }}</td>
           <td>{{ se.get_status_display }}</td>
-          <td>{{ se.volume|floatformat }}&nbsp;{{ se.unit }}</td>
+          <td>{{ se.volume.normalize }}&nbsp;{{ se.unit }}</td>
         </tr>
       {% endfor %}
     </tbody>

@@ -1,14 +1,17 @@
+import json
+
 from celery.result import AsyncResult
 from datetime import datetime, timezone, time
 
-from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
-from django.http import Http404
-from django.template.response import TemplateResponse
+from django.db.models import Prefetch, F
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect
+from django.template.response import TemplateResponse
+from django.urls import reverse
 
-from vetis_api.models import BusinessEntity, Enterprise, ProductItem, StockEntry, TZ_MOSCOW
+from vetis_api.models import *
 from vetis_api.tasks import (
     test_task,
     reload_enterprises,
@@ -18,11 +21,22 @@ from vetis_api.tasks import (
     update_stock_entry_history
     )
 from .util import build_url
-from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm
+from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm, StockEntryCommentForm
 
 
 def index(request):
-    return TemplateResponse(request, 'main/index.html', {})
+    stock_entries_expiry = StockEntry.objects.filter(
+        is_last=True,
+        is_active=True,
+        volume__gt=0,
+        date_expiry__lte=(datetime.now(tz=TZ_MOSCOW)+timedelta(days=30))
+        ).order_by('date_expiry')
+    
+    context = {
+        'stock_entries_expiry': stock_entries_expiry
+    }
+
+    return TemplateResponse(request, 'main/index.html', context)
 
 
 def select_workspace(request):
@@ -156,19 +170,25 @@ def stock_entries(request):
             if form.cleaned_data['has_quantity']:
                 stock_entries = stock_entries.filter(volume__gt=0)
             if form.cleaned_data['date_produced_begin']:
-                # date_produced_begin = timezone.make_aware(form.cleaned_data['date_produced_begin'], timezone=TZ_MOSCOW)
                 date_produced_begin = datetime.combine(form.cleaned_data['date_produced_begin'], time(hour=0), tzinfo=TZ_MOSCOW)
-                print(f'date_produced_begin {date_produced_begin}')
                 stock_entries = stock_entries.filter(date_produced__gte=date_produced_begin)
                 has_collapsed_filters = True
             if form.cleaned_data['date_produced_end']:
-                # date_produced_end = timezone.make_aware(form.cleaned_data['date_produced_end'], timezone=TZ_MOSCOW)
                 date_produced_end = datetime.combine(form.cleaned_data['date_produced_end'], time(hour=23, minute=59, second=59), tzinfo=TZ_MOSCOW)
-                print(f'date_produced_end {date_produced_end}')
                 stock_entries = stock_entries.filter(date_produced__lte=date_produced_end)
+                has_collapsed_filters = True
+            if form.cleaned_data['date_created_begin']:
+                date_created_begin = datetime.combine(form.cleaned_data['date_created_begin'], time(hour=0), tzinfo=TZ_MOSCOW)
+                stock_entries = stock_entries.filter(date_created__gte=date_created_begin)
+                has_collapsed_filters = True
+            if form.cleaned_data['date_created_end']:
+                date_created_end = datetime.combine(form.cleaned_data['date_created_end'], time(hour=23, minute=59, second=59), tzinfo=TZ_MOSCOW)
+                stock_entries = stock_entries.filter(date_created__lte=date_created_end)
                 has_collapsed_filters = True
 
             stock_entries = stock_entries.order_by('date_expiry', '-entry_number')[:1000]
+
+            # prefetch related comments
 
     else:
         form = StockEntriesFilterForm()
@@ -191,8 +211,36 @@ def stock_entry_detail(request, id):
 
     stock_entry_history = StockEntry.objects.filter(guid=stock_entry.guid).order_by('date_created')
 
+    comment = StockEntryComment.objects.filter(stock_entry_guid=stock_entry.guid).first()
+
+    if request.method == 'POST':
+        comment_form = StockEntryCommentForm(request.POST)
+        if comment_form.is_valid():
+            if comment_form.cleaned_data['text']:
+                if comment is None:
+                    comment = StockEntryComment()
+
+                comment.stock_entry_guid = stock_entry.guid
+                comment.important = comment_form.cleaned_data['important']
+                comment.text = comment_form.cleaned_data['text']
+                comment.save()
+                messages.add_message(request, messages.INFO, 'Комментарий сохранен.')
+            else:
+                if comment is not None:
+                    comment.delete()
+                messages.add_message(request, messages.WARNING, 'Комментарий удален.')
+
+            return redirect(reverse('main:stock_entry_detail', kwargs={'id': stock_entry.id}))
+
+    else:
+        comment_form = StockEntryCommentForm()
+        if comment is not None:
+            comment_form.initial={'important': comment.important, 'text': comment.text}
+
     context = {
         'stock_entry': stock_entry,
+        'comment': comment,
+        'comment_form': comment_form,
         'stock_entry_history': stock_entry_history,
     }
     return TemplateResponse(request, 'main/stock_entry_detail.html', context=context)
@@ -211,6 +259,7 @@ def task_info(request):
             'state': task_result.state,
             'ready': task_result.ready(),
             'result': task_result.result,
+            'tick': ('.'*10)[:datetime.now().second%10+1] if not task_result.ready() else '',
         }
 
         http_status = 286 if task_result.ready() else 200

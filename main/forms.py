@@ -20,8 +20,15 @@ class ProductItemsFilterForm(forms.Form):
 
 
 class StockEntriesFilterForm(forms.Form):
-    search_query = forms.CharField(max_length=100, label='Название', required=False, widget=forms.widgets.TextInput(attrs={'autocomplete': 'off'}))
+    search_query = forms.CharField(max_length=100, label='Наименование', required=False, widget=forms.widgets.TextInput(attrs={'autocomplete': 'off'}))
     product = forms.ModelChoiceField(queryset=Product.objects.all(), label='Продукция', required=False)
     has_quantity = forms.BooleanField(label='Непустые', initial=True, required=False)
     date_produced_begin = forms.DateField(label='Выпущено с', required=False, widget=forms.widgets.DateInput(attrs={'type': 'date'}))
     date_produced_end = forms.DateField(label='Выпущено по', required=False, widget=forms.widgets.DateInput(attrs={'type': 'date'}))
+    date_created_begin = forms.DateField(label='Изменено с', required=False, widget=forms.widgets.DateInput(attrs={'type': 'date'}))
+    date_created_end = forms.DateField(label='Изменено по', required=False, widget=forms.widgets.DateInput(attrs={'type': 'date'}))
+
+
+class StockEntryCommentForm(forms.Form):
+    important = forms.BooleanField(required=False, label='Важно')
+    text = forms.CharField(max_length=255, required=False, label='Комментарий', widget=forms.widgets.TextInput(attrs={'autocomplete': 'off'}))

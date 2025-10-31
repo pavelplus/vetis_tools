@@ -1,0 +1,37 @@
+<td><a target="_blank" class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:stock_entry_detail' stock_entry.id %}">{{ stock_entry.entry_number }}</a></td>
+    <td>
+        <span class="{{ stock_entry.volume|yesno:',text-secondary-emphasis' }}">
+        {{ stock_entry.product_item_name }}
+        </span>
+        {% with stock_entry.get_comment as comment %}
+        {% if comment %}
+        {% if comment.important %}
+            <span class="text-warning">
+            <i class="bi bi-exclamation-square-fill"></i>
+            {{ comment.text }}
+            </span>
+        {% else %}
+            <span class="text-info">
+            <i class="bi bi-info-circle"></i>
+            {{ comment.text }}
+            </span>
+        {% endif %}
+        {% endif %}
+        {% endwith %}
+        {% if show_origin_detail %}
+            <p class="my-0 text-secondary" style="font-size: 0.75rem;">{{ stock_entry.origin_country }} {{ stock_entry.producer_name }}</p>
+        {% endif %}
+        {% if show_enterprise_name %}
+            <p class="my-0 text-secondary" style="font-size: 0.75rem;">{{ stock_entry.enterprise }}</p>
+        {% endif %}
+    </td>
+    <td><small>{{ stock_entry.date_produced_display }}</small></td>
+    <td><small class="{{ stock_entry.date_expiry_class }}">{{ stock_entry.date_expiry_display }}</small></td>
+    <td>
+        {% if stock_entry.volume %}
+        {{ stock_entry.volume.normalize }}&nbsp;{{ stock_entry.unit }}
+        {% else %}
+        <i class="bi bi-dash"></i>
+        {% endif %}
+    </td>
+</tr>

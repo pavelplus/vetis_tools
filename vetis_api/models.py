@@ -364,6 +364,23 @@ class StockEntry(models.Model):
     def date_expiry_display(self):
         return self.date_expiry_1 + ( f' - {self.date_expiry_2}' if self.date_expiry_2 else '')
     
+    def days_to_expiry(self) -> int:
+        date_to_compare = datetime.now(tz=TZ_MOSCOW)
+        delta = self.date_expiry - date_to_compare
+        return delta.days
+    
+    def date_expiry_group(self) -> str:
+        EXPIRY_GROUPS = (
+            (0, 'Просрочена'),
+            (7, 'Менее 7 дней'),
+            (30, 'Менее 30 дней'),
+        )
+        days_to_expiry = self.days_to_expiry()
+        for val, group_name in EXPIRY_GROUPS:
+            if days_to_expiry <= val:
+                return group_name
+        return 'Более 30 дней'
+
     def date_expiry_class(self) -> str:
         CLASS_VALUES = (
             (0, 'text-danger'),
@@ -371,13 +388,14 @@ class StockEntry(models.Model):
         )
         if not self.volume:
             return ''
-        date_to_compare = datetime.now(tz=TZ_MOSCOW)
-        delta = self.date_expiry - date_to_compare
+        days_to_expiry = self.days_to_expiry()
         for val, class_name in CLASS_VALUES:
-            if delta.days <= val:
+            if days_to_expiry <= val:
                 return class_name
         return ''
-        
+
+    def get_comment(self):
+        return StockEntryComment.objects.filter(stock_entry_guid=self.guid).first()    
 
     def __str__(self):
         return f'{self.entry_number} {self.product_item_name} - {self.volume}'
@@ -440,3 +458,33 @@ class Package(models.Model):
         verbose_name = 'упаковка'
         verbose_name_plural = 'упаковки'
         ordering = ['level']
+
+
+class StockEntryVetDocument(models.Model):
+    stock_entry = models.ForeignKey(StockEntry, on_delete=models.CASCADE, verbose_name='запись журнала')
+    uuid = models.UUIDField()
+
+    
+    def get_formatted_uuid(self):
+        uuid_str = str(self.uuid).replace('-', '')
+        return '-'.join(uuid_str[0+i:4+i] for i in range(0, len(uuid_str), 4))
+
+    def __str__(self):
+        return self.uuid
+    
+    class Meta:
+        verbose_name = 'вет. документ'
+        verbose_name_plural = 'вет. документы'
+
+
+class StockEntryComment(models.Model):
+    stock_entry_guid = models.UUIDField(unique=True, db_index=True, verbose_name='GUID записи журнала')
+    important = models.BooleanField(verbose_name='важно')
+    text = models.CharField(max_length=255, verbose_name='текст')
+
+    def __str__(self):
+        return self.text
+    
+    class Meta:
+        verbose_name = 'комментарий записи журнала'
+        verbose_name_plural = 'комментарии записи журнала'

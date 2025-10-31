@@ -1,5 +1,41 @@
 {% extends 'main/base.html' %}
 
 {% block content %}
-  <h1 class="mt-3">Главная страница</h1>
+  {% if stock_entries_expiry %}
+    <h3 class="mt-3">Продукция с малыми сроками</h3>
+    {% for stock_entry in stock_entries_expiry %}
+      {% if forloop.first %}
+        <p class="my-0 text-secondary border-bottom"><small>Показано записей: {{ stock_entries_expiry.count }}</small></p>
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Номер</th>
+              <th scope="col">Наименование</th>
+              <th scope="col">Произведено</th>
+              <th scope="col">Срок годности</th>
+              <th scope="col">Объем</th>
+            </tr>
+          </thead>
+          <tbody>
+      {% endif %}
+      {% ifchanged stock_entry.date_expiry_group %}
+            <tr class="bg-body-secondary">
+              <td>&nbsp;</td>
+              <td class="{{ stock_entry.date_expiry_class }} fw-bold"><i class="bi bi-calendar-check"></i> {{ stock_entry.date_expiry_group }}</td>
+              <td>&nbsp;</td>
+              <td>&nbsp;</td>
+              <td>&nbsp;</td>
+            </tr>
+      {% endifchanged %}
+      {% with show_enterprise_name=True %}
+        {% include "main/includes/stock_entry_table_row.html" %}
+      {% endwith %}
+      {% if forloop.last %}
+          </tbody>
+          </table>
+      {% endif %}
+    {% endfor %}
+
+  
+  {% endif %}
 {% endblock %}

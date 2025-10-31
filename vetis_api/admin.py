@@ -1,18 +1,6 @@
 from django.contrib import admin
 
-from .models import (
-    BusinessEntity,
-    VetisCredentials,
-    Enterprise,
-    ProductItem,
-    ApiRequestsHistoryRecord,
-    Product,
-    SubProduct,
-    Unit,
-    StockEntry,
-    PackingType,
-    Package
-    )
+from .models import *
 
 
 @admin.register(ApiRequestsHistoryRecord)
@@ -62,11 +50,17 @@ class PackageAdmin(admin.ModelAdmin):
 class PackageInline(admin.TabularInline):
     model = Package
     fields = ['level', 'packing_type', 'quantity', 'product_marks']
+    extra = 0
+
+class StockEntryVetDocumentInline(admin.TabularInline):
+    model = StockEntryVetDocument
+    fields = ['uuid']
+    extra = 0
 
 @admin.register(StockEntry)
 class StockEntryAdmin(admin.ModelAdmin):
     list_display = ['product_item_name', 'product_type', 'enterprise', 'volume']
-    inlines = [PackageInline]
+    inlines = [PackageInline, StockEntryVetDocumentInline]
 
 @admin.register(PackingType)
 class PackingTypeAdmin(admin.ModelAdmin):
