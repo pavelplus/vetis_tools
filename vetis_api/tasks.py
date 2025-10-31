@@ -144,12 +144,12 @@ def reload_enterprises(credentials_id: int, business_entity_id: int):
     try:
         business_entity = BusinessEntity.objects.get(id=business_entity_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Хозяйствующий субъект не найден!')
+        raise RuntimeError('Хозяйствующий субъект не найден')
     
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Не обнаружены параметры подключения!')
+        raise RuntimeError('Не обнаружены параметры подключения')
     
     list_count = 1000
     list_offset = 0
@@ -405,7 +405,7 @@ def reload_product_subproduct(credentials_id: int):
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Не обнаружены параметры подключения!')
+        raise RuntimeError('Не обнаружены параметры подключения')
 
     for product in Product.objects.all():
         get_or_load_product_by_guid(credentials=credentials, product_guid=product.guid, update=True)
@@ -421,12 +421,12 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
     try:
         business_entity = BusinessEntity.objects.get(id=business_entity_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Хозяйствующий субъект не найден!')
+        raise RuntimeError('Хозяйствующий субъект не найден')
     
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Не обнаружены параметры подключения!')
+        raise RuntimeError('Не обнаружены параметры подключения')
     
     list_count = 1000
     list_offset = 0
@@ -725,12 +725,12 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
     try:
         enterprise = Enterprise.objects.get(id=enterprise_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Предприятие не найдено!')
+        raise RuntimeError('Предприятие не найдено')
     
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Не обнаружены параметры подключения!')
+        raise RuntimeError('Не обнаружены параметры подключения')
     
     # last_updated_entry = StockEntry.objects.filter(enterprise=enterprise).order_by('-date_updated').first()
 
@@ -820,12 +820,12 @@ def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_
     try:
         stock_entry = StockEntry.objects.get(id=stock_entry_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Запись журнала не найдена!')
+        raise RuntimeError('Запись журнала не найдена')
     
     try:
         credentials = VetisCredentials.objects.get(id=credentials_id)
     except ObjectDoesNotExist:
-        raise RuntimeError('Не обнаружены параметры подключения!')
+        raise RuntimeError('Не обнаружены параметры подключения')
     
     enterprise = stock_entry.enterprise
 

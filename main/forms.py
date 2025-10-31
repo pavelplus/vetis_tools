@@ -17,6 +17,7 @@ class WorkspaceSelectionForm(forms.Form):
 class ProductItemsFilterForm(forms.Form):
     business_entity = forms.ModelChoiceField(queryset=BusinessEntity.objects.all(), label='Владелец', required=False)
     search_query = forms.CharField(max_length=100, label='Название', required=False)
+    by_groups = forms.BooleanField(label='По группам', required=False)
 
 
 class StockEntriesFilterForm(forms.Form):

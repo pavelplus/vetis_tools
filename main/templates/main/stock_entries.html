@@ -59,9 +59,7 @@
         </thead>
         <tbody>
     {% endif %}
-    {% with show_origin_info=True %}
-      {% include "main/includes/stock_entry_table_row.html" %}
-    {% endwith %}
+    {% include "main/includes/stock_entry_table_row.html" %}
     {% if forloop.last %}
         </tbody>
       </table>

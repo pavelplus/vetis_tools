@@ -1,9 +1,8 @@
 import json
 
 from celery.result import AsyncResult
-from datetime import datetime, timezone, time
+from datetime import datetime, time
 
-from django.db.models import Prefetch, F
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
@@ -102,20 +101,29 @@ def business_entity_detail(request, id):
 def product_items(request):
 
     product_items = ProductItem.objects.none()
+    # product_items = ProductItem.objects.filter(is_active=True).select_related('product', 'subproduct').order_by('product_type', 'product__name', 'subproduct__name', 'name')
+    show_business_entity = True
+    by_groups = False
 
     if request.method == 'POST':
         form = ProductItemsFilterForm(request.POST)
         if form.is_valid():
-            product_items = ProductItem.objects.all()
+            by_groups = form.cleaned_data['by_groups']
+            order_by_clause = ['product_type', 'product__name', 'subproduct__name', 'name'] if by_groups else ['name']
+            product_items = ProductItem.objects.select_related('product', 'subproduct').order_by(*order_by_clause)
             if form.cleaned_data['business_entity']:
                 product_items = product_items.filter(producer=form.cleaned_data['business_entity'])
+                show_business_entity = False
             if form.cleaned_data['search_query']:
                 product_items = product_items.filter(name__icontains=form.cleaned_data['search_query'])
+
     else:
         form = ProductItemsFilterForm()
 
     context = {
         'form': form,
+        'by_groups': by_groups,
+        'show_business_entity': show_business_entity,
         'product_items': product_items,
     }
     return TemplateResponse(request, 'main/product_items.html', context=context)
@@ -158,7 +166,7 @@ def stock_entries(request):
     if request.method == 'POST':
         form = StockEntriesFilterForm(request.POST)
         if form.is_valid():
-            stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True)
+            stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True).order_by('date_expiry', '-entry_number')
             if form.cleaned_data['product']:
                 stock_entries = stock_entries.filter(product= form.cleaned_data['product'])
             if form.cleaned_data['search_query']:
@@ -186,7 +194,7 @@ def stock_entries(request):
                 stock_entries = stock_entries.filter(date_created__lte=date_created_end)
                 has_collapsed_filters = True
 
-            stock_entries = stock_entries.order_by('date_expiry', '-entry_number')[:1000]
+            stock_entries = stock_entries[:1000]
 
             # prefetch related comments
 
@@ -201,6 +209,7 @@ def stock_entries(request):
         'stock_last_updated': stock_last_updated,
         'date_to_compare': date_to_compare,
         'stock_entries': stock_entries,
+        'show_origin_detail': True,
         'btn_filters_class': 'btn-warning' if has_collapsed_filters else 'btn-secondary',
     }
     return TemplateResponse(request, 'main/stock_entries.html', context=context)

@@ -26,39 +26,115 @@
     </form>
   </div>
 
-  <form method="POST" name="search_form">
+  <form method="POST" name="search_form" class="mb-3">
     {% csrf_token %}
     <div class="row align-items-end">
-      {% bootstrap_field form.business_entity wrapper_class='col-lg-5 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.business_entity wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
       {% bootstrap_field form.search_query wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
-      <div class="col-lg-3">
+      {% bootstrap_field form.by_groups wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+      <div class="col-lg-2">
         <button class="btn btn-primary" name="search" type="submit">Применить</button>
       </div>
     </div>
   </form>
-  <hr />
-  {% for product_item in product_items %}
+
+  {% if by_groups %}
+
+    {% for product_item in product_items %}
+      {% ifchanged product_item.get_product_type_display %}
+      <h4 class="mt-3 border-bottom text-secondary-emphasis"><i class="bi bi-1-circle"></i> {{ product_item.get_product_type_display }}</h4>
+      {% endifchanged %}
+      {% ifchanged product_item.product %}
+      <h5 class="ms-2 mt-2 border-bottom text-secondary-emphasis"><i class="bi bi-2-circle"></i> {{ product_item.product.name }}{% if product_item.product.code %} <small class="text-secondary">({{ product_item.product.code }})</small>{% endif %}</h5>
+      {% endifchanged %}
+      {% ifchanged product_item.subproduct %}
+      <div class="ms-3 mt-1 text-secondary-emphasis fw-bold"><i class="bi bi-3-circle"></i> {{ product_item.subproduct.name }}{% if product_item.subproduct.code %} <small class="text-secondary">({{ product_item.subproduct.code }})</small>{% endif %}</div>
+      {% endifchanged %}
+      <div class="ms-4 my-0">
+        <i class="bi bi-arrow-right"></i>
+        <a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:product_item_detail' product_item.id %}">{{ product_item.name }}</a>
+        {% if product_item.is_gost %}<span class="badge text-bg-warning">{{ product_item.gost }}</span>{% endif %}
+        {% if show_business_entity and product_item.producer %}<span class="text-info">{{ product_item.producer }}</span>{% endif %}
+      </div>
+    {% empty %}
+      <div class="alert alert-info mt-3" role="alert">Нет записей...</div>
+    {% endfor %}
+
+  {% else %}
+
+    {% for product_item in product_items %}
+      {% if forloop.first %}
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th scope="col">Наименование</th>
+              <th scope="col">Тип продукции</th>
+              <th scope="col">ГОСТ</th>
+              <th scope="col">Производитель</th>
+            </tr>
+          </thead>
+          <tbody>
+      {% endif %}
+            <tr>
+              <td><a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:product_item_detail' product_item.id %}">{{ product_item.name }}</a></td>
+              <td>{{ product_item.get_product_type_display }}</td>
+              {% if product_item.is_gost %}
+              <td>{{ product_item.gost }}</td>
+              {% else %}
+              <td>-</td>
+              {% endif %}
+              <td>{{ product_item.producer }}</td>
+            </tr>
+      {% if forloop.last %}
+          </tbody>
+        </table>
+      {% endif %}
+      {% empty %}
+      <div class="alert alert-info mt-3" role="alert">Нет записей...</div>
+    {% endfor %}
+
+  {% endif %}
+
+  {% comment %} {% for product_item in product_items %}
     {% if forloop.first %}
-      <table class="table table-striped">
+      <table class="table">
         <thead>
           <tr>
-            <th scope="col">Наименование</th>
             <th scope="col">Тип продукции</th>
-            <th scope="col">ГОСТ</th>
-            <th scope="col">Производитель</th>
+            <th scope="col">Продукция</th>
+            <th scope="col">Вид продукции</th>
+            <th scope="col">Наименование продукции</th>
           </tr>
         </thead>
         <tbody>
     {% endif %}
           <tr>
-            <td><a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:product_item_detail' product_item.id %}">{{ product_item.name }}</a></td>
-            <td>{{ product_item.get_product_type_display }}</td>
-            {% if product_item.is_gost %}
-            <td>{{ product_item.gost }}</td>
-            {% else %}
-            <td>-</td>
-            {% endif %}
-            <td>{{ product_item.producer }}</td>
+            <td>
+              {% ifchanged product_item.get_product_type_display %}
+                <span class="text-secondary-emphasis"><i class="bi bi-1-circle"></i> {{ product_item.get_product_type_display }}</span>
+              {% else %}
+                &nbsp;
+              {% endifchanged %}
+            </td>
+            <td>
+              {% ifchanged product_item.product %}
+                <span class="text-secondary-emphasis"><i class="bi bi-2-circle"></i> {{ product_item.product.name }}{% if product_item.product.code %} <small class="text-secondary">({{ product_item.product.code }})</small>{% endif %}</span>
+              {% else %}
+                &nbsp;
+              {% endifchanged %}
+            </td>
+            <td>
+              {% ifchanged product_item.subproduct %}
+                <span class="text-secondary-emphasis"><i class="bi bi-3-circle"></i> {{ product_item.subproduct.name }}{% if product_item.subproduct.code %} <small class="text-secondary">({{ product_item.subproduct.code }})</small>{% endif %}</span>
+              {% else %}
+                &nbsp;
+              {% endifchanged %}
+            </td>
+            <td>
+              <a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:product_item_detail' product_item.id %}">{{ product_item.name }}</a>
+              {% if product_item.is_gost %}<span class="badge text-bg-warning">{{ product_item.gost }}</span>{% endif %}
+              {% if show_business_entity and product_item.producer %}<span class="text-info">{{ product_item.producer }}</span>{% endif %}
+            </td>
           </tr>
     {% if forloop.last %}
         </tbody>
@@ -66,5 +142,6 @@
     {% endif %}
     {% empty %}
     <div class="alert alert-info mt-3" role="alert">Нет записей...</div>
-  {% endfor %}
+  {% endfor %} {% endcomment %}
+
 {% endblock %}
