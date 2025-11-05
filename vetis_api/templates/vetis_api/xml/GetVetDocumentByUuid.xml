@@ -14,20 +14,14 @@ xmlns:dt="http://api.vetrf.ru/schema/cdm/dictionary/v2">
             <apl:issuerId>{{ vetis_request.issuer_id }}</apl:issuerId>
             <apl:issueDate>{{ vetis_request.issue_date }}</apl:issueDate>
             <apl:data>
-               <merc:getStockEntryListRequest>
+               <merc:getVetDocumentByUuidRequest>
          			<merc:localTransactionId>{{ vetis_request.local_transaction_id }}</merc:localTransactionId>
          			<merc:initiator>
          				<vd:login>{{ vetis_request.initiator_login }}</vd:login>
                   </merc:initiator>
-                  <bs:listOptions>
-            			<bs:count>{{ vetis_request.list_count }}</bs:count>
-            			<bs:offset>{{ vetis_request.list_offset }}</bs:offset>
-         			</bs:listOptions>
+                  <bs:uuid>{{ vetis_request.vet_document_uuid }}</bs:uuid>
          			<dt:enterpriseGuid>{{ vetis_request.enterprise_guid }}</dt:enterpriseGuid>
-         			<merc:searchPattern>
-         				<vd:blankFilter>NOT_BLANK</vd:blankFilter>
-         			</merc:searchPattern>
-         		</merc:getStockEntryListRequest>
+         		</merc:getVetDocumentByUuidRequest>
             </apl:data>
          </apl:application>
       </apldef:submitApplicationRequest>

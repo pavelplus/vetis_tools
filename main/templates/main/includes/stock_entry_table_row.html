@@ -1,37 +1,40 @@
 <td><a target="_blank" class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:stock_entry_detail' stock_entry.id %}">{{ stock_entry.entry_number }}</a></td>
-    <td>
+    <td class="py-0">
         <span class="{{ stock_entry.volume|yesno:',text-secondary-emphasis' }}">
         {{ stock_entry.product_item_name }}
         </span>
-        {% with stock_entry.get_comment as comment %}
-        {% if comment %}
-        {% if comment.important %}
+        {% if stock_entry.main.comment_text %}
+        {% if stock_entry.main.comment_important %}
             <span class="text-warning">
             <i class="bi bi-exclamation-square-fill"></i>
-            {{ comment.text }}
+            {{ stock_entry.main.comment_text }}
             </span>
         {% else %}
             <span class="text-info">
             <i class="bi bi-info-circle"></i>
-            {{ comment.text }}
+            {{ stock_entry.main.comment_text }}
             </span>
         {% endif %}
         {% endif %}
-        {% endwith %}
         {% if show_origin_detail %}
-            <p class="my-0 text-secondary" style="font-size: 0.75rem;">{{ stock_entry.origin_country }} {{ stock_entry.producer_name }}</p>
+            {% if stock_entry.main.is_populated %}
+                <p class="my-0 text-secondary" style="font-size: 0.75rem;">{{ stock_entry.main.get_initial_status_display }}: {{ stock_entry.main.source_ent_name }}</p>
+            {% else %}
+                <p class="my-0 text-secondary" style="font-size: 0.75rem;">{{ stock_entry.origin_country }} {{ stock_entry.producer_name }}</p>
+            {% endif %}
         {% endif %}
         {% if show_enterprise_name %}
             <p class="my-0 text-secondary" style="font-size: 0.75rem;">{{ stock_entry.enterprise }}</p>
         {% endif %}
     </td>
-    <td><small>{{ stock_entry.date_produced_display }}</small></td>
-    <td><small class="{{ stock_entry.date_expiry_class }}">{{ stock_entry.date_expiry_display }}</small></td>
-    <td>
+    <td class="py-0"><small>{{ stock_entry.date_produced_display }}</small></td>
+    <td class="py-0"><small class="{{ stock_entry.date_expiry_class }}">{{ stock_entry.date_expiry_display }}</small></td>
+    <td class="py-0">
         {% if stock_entry.volume %}
         {{ stock_entry.volume.normalize }}&nbsp;{{ stock_entry.unit }}
         {% else %}
         <i class="bi bi-dash"></i>
         {% endif %}
+        {% if stock_entry.main.is_populated %} <small class="text-secondary">/ {{ stock_entry.main.initial_volume.normalize }}</small>{% endif %}
     </td>
 </tr>

@@ -101,7 +101,7 @@
           <th scope="row">Вет. документы</th>
           <td>
             {% for vet_document in stock_entry.stockentryvetdocument_set.all %}
-              <p class="my-0"><a target="_blank" href="https://mercury.vetrf.ru/pub/operatorui?_action=findVetDocumentFormByUuid&uuid={{ vet_document.get_formatted_uuid }}">{{ vet_document.get_formatted_uuid }}</a></p>
+              <p class="my-0"><a target="_blank" href="https://mercury.vetrf.ru/pub/operatorui?_action=findVetDocumentFormByUuid&uuid={{ vet_document.get_formatted_uuid }}">{{ vet_document.uuid }}</a></p>
             {% endfor %}
           </td>
         </tr>
@@ -111,8 +111,8 @@
           Комментарий
         </th>
         <td>
-          {% if comment.important %}<i class="bi bi-exclamation-square-fill text-warning"></i>{% endif %}
-          {{ comment.text }}
+          {% if stock_entry.main.comment_important %}<i class="bi bi-exclamation-square-fill text-warning"></i>{% endif %}
+          {{ stock_entry.main.comment_text }}
           <a class="" data-bs-toggle="collapse" href="#collapseFilter" title="Изменить"><i class="bi bi-pencil-square"></i></a>
           <div class="collapse" id="collapseFilter">
             {% load django_bootstrap5 %}

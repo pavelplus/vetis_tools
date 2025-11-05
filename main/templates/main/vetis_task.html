@@ -6,6 +6,7 @@
     <form method="post" action="{% url 'main:vetis_task' %}">
       {% csrf_token %}
       <button type="submit" name="vetis_task" value="test_task" class="btn btn-primary">Тестовая задача</button>
+      <button type="submit" name="vetis_task" value="update_stock_entry_main_records" class="btn btn-secondary" onclick="return window.confirm('Точно?')">Main records</button>
     </form>
   </div>
   {% if request.GET.task_id %}

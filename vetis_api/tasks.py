@@ -53,7 +53,7 @@ def send_soap_request(soap_request: AbstractRequest, credentials: VetisCredentia
                     headers=headers,
                     data=body
                 )
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
             response = None
         
         if response is None:
@@ -103,7 +103,7 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
     status = '---'
 
     for try_num in range(4):
-        sleep(5 + try_num*10)
+        sleep(3 + try_num*10)
 
         print(f'Receiving result... Try #{try_num}')
         
@@ -398,6 +398,83 @@ def get_or_load_product_item_by_guid(credentials: VetisCredentials, product_item
     return product_item
 
 
+def get_or_load_business_entity_info_by_guid(credentials: VetisCredentials, business_entity_guid: str, update: bool = False) -> BusinessEntityInfo:
+    try:
+        be_info = BusinessEntityInfo.objects.get(guid=business_entity_guid)
+    except ObjectDoesNotExist:
+        be_info = None
+
+    if be_info is not None and not update:
+        return be_info
+
+    if be_info is None:
+        be_info = BusinessEntityInfo()
+
+    print(f'Loading business entity info: {business_entity_guid}')
+    
+    soap_request = BusinessEntityByGuidRequest(business_entity_guid)
+    response = send_soap_request(soap_request, credentials)
+
+    result_xml = ET.fromstring(response.text)
+
+    business_entity_xml = result_xml.find('./soapenv:Body/ws:getBusinessEntityByGuidResponse/dt:businessEntity', NAMESPACES)
+
+    be_info.guid = business_entity_guid
+    be_info.uuid = business_entity_xml.find('bs:uuid', NAMESPACES).text
+
+    name_xml = business_entity_xml.find('dt:name', NAMESPACES)
+    if name_xml is None:
+        name_xml = business_entity_xml.find('dt:fullName', NAMESPACES)
+    if name_xml is None:
+        name_xml = business_entity_xml.find('dt:fio', NAMESPACES)
+    if name_xml is None:
+        be_info.name = str(business_entity_guid)
+    else:
+        be_info.name = name_xml.text
+
+    inn_xml = business_entity_xml.find('dt:inn', NAMESPACES)
+    if inn_xml is not None:
+        be_info.inn = inn_xml.text
+    
+    be_info.save()
+
+    return be_info
+
+
+def get_or_load_enterprise_info_by_guid(credentials: VetisCredentials, enterprise_guid: str, update: bool = False) -> EnterpriseInfo:
+    try:
+        ent_info = EnterpriseInfo.objects.get(guid=enterprise_guid)
+    except ObjectDoesNotExist:
+        ent_info = None
+
+    if ent_info is not None and not update:
+        return ent_info
+
+    if ent_info is None:
+        ent_info = EnterpriseInfo()
+    
+    print(f'Loading enterprise info: {enterprise_guid}')
+
+    soap_request = EnterpriseByGuidRequest(enterprise_guid)
+    response = send_soap_request(soap_request, credentials)
+
+    result_xml = ET.fromstring(response.text)
+
+    enterprise_xml = result_xml.find('./soapenv:Body/ws:getEnterpriseByGuidResponse/dt:enterprise', NAMESPACES)
+
+    ent_info.guid = enterprise_guid
+    ent_info.uuid = enterprise_xml.find('bs:uuid', NAMESPACES).text
+    name_xml = enterprise_xml.find('dt:name', NAMESPACES)
+    ent_info.name = name_xml.text
+    address_xml = enterprise_xml.find('dt:address/dt:addressView', NAMESPACES)
+    if address_xml is not None:
+        ent_info.address = address_xml.text
+    
+    ent_info.save()
+
+    return ent_info
+
+
 @shared_task
 def reload_product_subproduct(credentials_id: int):
     """Update existing product and subproduct records form Vetis"""
@@ -524,9 +601,16 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
 
 def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, stock_entry_xml: ET.Element, credentials: VetisCredentials):
 
+    # main
     # enterprise
     # guid
     # uuid
+
+    stock_entry.enterprise = enterprise
+    stock_entry.guid = stock_entry_xml.find('bs:guid', NAMESPACES).text
+    stock_entry.uuid = stock_entry_xml.find('bs:uuid', NAMESPACES).text
+    stock_entry.main, main_created = StockEntryMain.objects.get_or_create(guid=stock_entry.guid)
+
     # is_active
     # is_last
     # status
@@ -536,9 +620,6 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
     # next_uuid
     # entry_number
 
-    stock_entry.enterprise = enterprise
-    stock_entry.guid = stock_entry_xml.find('bs:guid', NAMESPACES).text
-    stock_entry.uuid = stock_entry_xml.find('bs:uuid', NAMESPACES).text
     stock_entry.is_active = stock_entry_xml.find('bs:active', NAMESPACES).text == 'true'
     stock_entry.is_last = stock_entry_xml.find('bs:last', NAMESPACES).text == 'true'
     stock_entry.status = int(stock_entry_xml.find('bs:status', NAMESPACES).text)
@@ -812,6 +893,8 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
 
     # /transaction.atomic   
 
+    update_stock_entry_main_records(credentials_id, initiator_login, enterprise_id)
+
     return f'Складские записи для предприятия успешно обновлены. Всего: {total}'
 
 
@@ -888,3 +971,121 @@ def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_
     # /transaction.atomic   
 
     return f'История для записи журнала успешно обновлена. Всего: {total}'
+
+
+def update_stock_entry_main(stock_entry_main: StockEntryMain, credentials: VetisCredentials, initiator_login: str):
+    if stock_entry_main.is_populated:
+        return False
+    
+    first_stock_entry = StockEntry.objects.filter(main=stock_entry_main).order_by('date_created').first()
+
+    if first_stock_entry is None:
+        print('Не найдено версий для данной записи')
+        raise RuntimeError(f'Не найдено версий для головной записи журнала с id={stock_entry_main.id}')
+
+    if first_stock_entry.previous_uuid is not None:
+        print('Загружаем полную историю записи журнала')
+        update_stock_entry_history(credentials.id, initiator_login=initiator_login, stock_entry_id=first_stock_entry.id)
+        first_stock_entry = StockEntry.objects.filter(main=stock_entry_main).order_by('date_created').first()
+        if first_stock_entry is None:
+            raise RuntimeError(f'Не удалось загрузить полную историю для записи с id={first_stock_entry.id}')
+    
+    if first_stock_entry.status in [102]:
+        print('Пробуем загрузить данные из вет. документа')
+        vet_document = first_stock_entry.stockentryvetdocument_set.first()
+
+        if vet_document is not None:
+            soap_request = GetVetDocumentByUuidRequest(
+                enterprise_guid=first_stock_entry.enterprise.guid,
+                vet_document_uuid=vet_document.uuid,
+                api_key=credentials.api_key,
+                service_id=credentials.service_id,
+                issuer_id=credentials.issuer_id,
+                initiator_login=initiator_login
+            )
+
+            response = send_2step_soap_request(soap_request, credentials)
+
+            result_xml = ET.fromstring(response.text)
+
+            response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getVetDocumentByUuidResponse/vd:vetDocument', NAMESPACES)
+
+            if response_xml is None:
+                raise RuntimeError('Ошибка парсинга ответа при загрузке вет. документа: не найден вет. документ')
+            
+            vetd_type = response_xml.find('vd:vetDType', NAMESPACES).text
+
+            if vetd_type != 'TRANSPORT':
+                raise RuntimeError(f'Неизвестный тип ветеринарного документа {vetd_type}')
+
+            stock_entry_main.initial_status = first_stock_entry.status
+            stock_entry_main.date_created = first_stock_entry.date_created
+            stock_entry_main.initial_volume = first_stock_entry.volume
+            stock_entry_main.source_be_guid = response_xml.find('vd:certifiedConsignment/vd:consignor/dt:businessEntity/bs:guid', NAMESPACES).text
+            stock_entry_main.source_be_name = str(get_or_load_business_entity_info_by_guid(credentials, stock_entry_main.source_be_guid))
+            stock_entry_main.source_ent_guid = response_xml.find('vd:certifiedConsignment/vd:consignor/dt:enterprise/bs:guid', NAMESPACES).text
+            stock_entry_main.source_ent_name = str(get_or_load_enterprise_info_by_guid(credentials, stock_entry_main.source_ent_guid))
+            stock_entry_main.is_populated = True
+            stock_entry_main.save()
+            return True
+
+        else:
+            print(f'Нет вет. документа для записи со статусом Гашение ВСД. Номер записи={first_stock_entry.entry_number}')
+            return False
+
+    else:
+        stock_entry_main.initial_status = first_stock_entry.status
+        stock_entry_main.date_created = first_stock_entry.date_created
+        stock_entry_main.initial_volume = first_stock_entry.volume
+        stock_entry_main.source_be_guid = first_stock_entry.enterprise.business_entity.guid
+        stock_entry_main.source_be_name = str(first_stock_entry.enterprise.business_entity)
+        stock_entry_main.source_ent_guid = first_stock_entry.enterprise.guid
+        stock_entry_main.source_ent_name = str(first_stock_entry.enterprise)
+        stock_entry_main.is_populated = True
+        stock_entry_main.save()
+    
+    return True
+
+
+@shared_task
+def update_stock_entry_main_records(credentials_id: int, initiator_login: str, enterprise_id: int):
+    try:
+        enterprise = Enterprise.objects.get(id=enterprise_id)
+    except ObjectDoesNotExist:
+        raise RuntimeError('Предприятие не найдено')
+    
+    try:
+        credentials = VetisCredentials.objects.get(id=credentials_id)
+    except ObjectDoesNotExist:
+        raise RuntimeError('Не обнаружены параметры подключения')
+    
+    if enterprise.business_entity.credentials != credentials:
+        raise RuntimeError('Параметры подключения не соответствуют указанному предприятию')
+    
+
+    # # VET DOCUMENT FIX
+    # ses = StockEntry.objects.filter(previous_uuid__isnull=True, status=102, main__is_populated=False)
+    # ses_count = ses.count()
+    # ses_current = 0
+    # for se in ses:
+    #     ses_current += 1
+    #     print(f'Updating stock entry {ses_current} of {ses_count}')
+    #     update_stock_entry_history(credentials_id, initiator_login, se.id)
+
+
+    stock_entries = StockEntry.objects.filter(is_last=True, enterprise=enterprise).select_related('main').exclude(main__is_populated=True)
+    total = stock_entries.count()
+    processed = 0
+    updated = 0
+
+    for stock_entry in stock_entries:
+        processed += 1
+        print(f'Updating stock entry main record: {processed} of {total}')
+        if update_stock_entry_main(
+            stock_entry_main=stock_entry.main,
+            credentials=credentials,
+            initiator_login=initiator_login
+        ):
+            updated += 1
+
+    return f'Завершено обновление головных записей журнала (обновлено {updated} из {total})'

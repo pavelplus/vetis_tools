@@ -93,6 +93,21 @@ class BusinessEntityByGuidRequest(AbstractRequest):
         return render_to_string('vetis_api/xml/GetBusinessEntityByGuid.xml', context)
     
 
+class EnterpriseByGuidRequest(AbstractRequest):
+
+    endpoint_name = 'EnterpriseService'
+    soap_action = 'GetEnterpriseByGuid'
+
+    def __init__(self, enterprise_guid: str):
+        self.enterprise_guid = enterprise_guid
+
+    def get_xml(self):
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetEnterpriseByGuid.xml', context)
+    
+
 class ActivityLocationListRequest(AbstractRequest):
 
     endpoint_name = 'EnterpriseService'
@@ -180,6 +195,28 @@ class GetStockEntryVersionListRequest(AbstractRequest):
             'vetis_request': self
         }
         return render_to_string('vetis_api/xml/GetStockEntryVersionList.xml', context)
+    
+
+class GetVetDocumentByUuidRequest(AbstractRequest):
+
+    endpoint_name = 'ApplicationManagementService'
+    soap_action = 'submitApplicationRequest'
+
+    def __init__(self, enterprise_guid: str, vet_document_uuid: str, api_key: str, service_id: str, issuer_id: str, initiator_login: str):
+        self.enterprise_guid = enterprise_guid
+        self.vet_document_uuid = vet_document_uuid
+        self.api_key = api_key
+        self.service_id = service_id
+        self.issuer_id = issuer_id
+        self.initiator_login = initiator_login
+    
+    def get_xml(self):
+        self.issue_date = datetime.now().strftime(VETIS_DATETIME_FORMAT)
+        self.local_transaction_id = datetime.now().strftime('%Y%m%d-%H%M%S')
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetVetDocumentByUuid.xml', context)
         
 
 class ReceiveApplicationResultRequest(AbstractRequest):

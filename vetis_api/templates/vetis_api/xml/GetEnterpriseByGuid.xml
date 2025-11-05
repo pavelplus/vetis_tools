@@ -1,0 +1,10 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:bs="http://api.vetrf.ru/schema/cdm/base"
+    xmlns:ws="http://api.vetrf.ru/schema/cdm/registry/ws-definitions/v2">
+    <soapenv:Header />
+    <soapenv:Body>
+        <ws:getEnterpriseByGuidRequest>
+            <bs:guid>{{ vetis_request.enterprise_guid }}</bs:guid>
+        </ws:getEnterpriseByGuidRequest>
+    </soapenv:Body>
+</soapenv:Envelope>

@@ -96,6 +96,7 @@ class Enterprise(models.Model):
     number_list = models.CharField(blank=True, verbose_name='номера предприятия')
     address = models.CharField(blank=True, max_length=255, verbose_name='адрес')
     is_active = models.BooleanField(default=True, verbose_name='активно')
+    is_allowed = models.BooleanField(default=False, verbose_name='разрешено работать через АПИ')
     stock_entries_last_updated = models.DateTimeField(null=True, blank=True, verbose_name='последнее обновление журнала')
 
     def __str__(self):
@@ -104,6 +105,38 @@ class Enterprise(models.Model):
     class Meta:
         verbose_name = 'предприятие'
         verbose_name_plural = 'предприятия'
+        ordering = ['name']
+
+
+class BusinessEntityInfo(models.Model):
+    guid = models.UUIDField(primary_key=True)
+    uuid = models.UUIDField()
+    name = models.CharField(max_length=255, verbose_name='имя')
+    inn = models.CharField(blank=True, max_length=20, verbose_name='ИНН')
+    date_updated = models.DateTimeField(auto_now=True, verbose_name='дата обновления')
+
+    def __str__(self):
+        return f'{self.name} ({self.inn})'
+    
+    class Meta:
+        verbose_name = 'хозяйствующий субъект (инфо)'
+        verbose_name_plural = 'хозяйствующие субъекты (инфо)'
+        ordering = ['name']
+
+
+class EnterpriseInfo(models.Model):
+    guid = models.UUIDField(primary_key=True)
+    uuid = models.UUIDField()
+    name = models.CharField(max_length=255, verbose_name='имя')
+    address = models.CharField(blank=True, max_length=255, verbose_name='адрес')
+    date_updated = models.DateTimeField(auto_now=True, verbose_name='дата обновления')
+
+    def __str__(self):
+        return f'{self.name} ({self.address})'
+    
+    class Meta:
+        verbose_name = 'предприятие (инфо)'
+        verbose_name_plural = 'предприятия (инфо)'
         ordering = ['name']
 
 
@@ -288,40 +321,159 @@ class ComplexDate():
         return True
 
 
-class StockEntry(models.Model):
-    STATUS_CHOICES = (
-        (100, 'Запись создана'),
-        (101, 'Гашение ВС (импорт)'),
-        (102, 'Гашение ВСД'),
-        (103, 'Производство'),
-        (104, 'Справка о здоровье дойных животных'),
-        (105, 'Аннулирование ВСД или транзакции'),
-        (106, 'Гашение бумажного ВСД'),
-        (110, 'Объединение'),
-        (120, 'Разделение'),
-        (200, 'Внесены изменения'),
-        (201, 'Запись аннулирована'),
-        (202, 'Списание'),
-        (203, 'Редактирование производства'),
-        (204, 'Заключение по результатам ВСЭ'),
-        (230, 'Обновление в результате присоединения'),
-        (231, 'Обновление в результате присоединения'),
-        (240, 'Обновление в результате отделения'),
-        (250, 'Восстановление после удаления'),
-        (260, 'Пометка на удаление'),
-        (300, 'Перемещение в другую группу'),
-        (400, 'Запись удалена'),
-        (410, 'Удаление в результате объединения'),
-        (420, 'Удаление в результате разделения'),
-        (430, 'Удаление в результате присоединения'),
+# class VetDocument(models.Model):
+#     VETDFORM_CHOICES = (
+#         ('CERTCU1', 'Форма 1 ветеринарного сертификата ТС'),
+#         ('LIC1', 'Форма 1 ветеринарного свидетельства'),
+#         ('CERTCU2', 'Форма 2 ветеринарного сертификата ТС'),
+#         ('LIC2', 'Форма 2 ветеринарного свидетельства'),
+#         ('CERTCU3', 'Форма 3 ветеринарного сертификата ТС'),
+#         ('LIC3', 'Форма 3 ветеринарного свидетельства'),
+#         ('NOTE4', 'Форма 4 ветеринарной справки'),
+#         ('CERT5I', 'Форма 5i ветеринарного сертификата'),
+#         ('CERT61', 'Форма 6.1 ветеринарного сертификата'),
+#         ('CERT62', 'Форма 6.2 ветеринарного сертификата'),
+#         ('CERT63', 'Форма 6.3 ветеринарного сертификата'),
+#         ('PRODUCTIVE', 'Форма производственного ветеринарного сертификата'),
+#     )
+
+#     VETDTYPE_CHOICES = (
+#         ('INCOMING', 'Входящий ВСД'),
+#         ('OUTGOING', 'Исходящий ВСД'),
+#         ('PRODUCTIVE', 'Производственный ВСД'),
+#         ('RETURNABLE', 'Возвратный ВСД'),
+#         ('TRANSPORT', 'Транспортный ВСД'),
+#     )
+
+#     VETDSTATUS_CHOICES = (
+#         ('CONFIRMED', 'Оформлен'),
+#         ('WITHDRAWN', 'Аннулирован'),
+#         ('UTILIZED', 'Погашен'),
+#         ('FINALIZED', 'Закрыт'),
+#     )
+
+#     enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='предприятие')
+#     uuid = models.UUIDField(unique=True, db_index=True)
+#     issue_date = models.DateField(verbose_name='дата оформления')
+#     vetd_form = models.CharField(max_length=10, choices=VETDFORM_CHOICES, verbose_name='форма')
+#     vetd_type = models.CharField(max_length=10, choices=VETDTYPE_CHOICES, verbose_name='тип')
+#     vetd_status = models.CharField(max_length=10, choices=VETDSTATUS_CHOICES, verbose_name='статус')
+#     is_finalized = models.BooleanField(default=False, verbose_name='закрыт')
+#     date_updated = models.DateTimeField(null=True, blank=True, verbose_name='дата изменения статуса')
+#     status_change = models.TextField(blank=True, verbose_name='информация об изменении статуса')
+
+#     consignor_be_guid = models.UUIDField(null=True, blank=True)
+#     consignor_ent_guid = models.UUIDField(null=True, blank=True)
+#     consignor_enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, related_name='consignor_vetd_set', verbose_name='предприятие-отправитель')
+#     consignee_be_guid = models.UUIDField(null=True, blank=True)
+#     consignee_ent_guid = models.UUIDField(null=True, blank=True)
+#     consignee_enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, related_name='consignee_vetd_set', verbose_name='предприятие-получатель')
+#     producer_be_guid = models.UUIDField(null=True, blank=True)
+#     producer_ent_guid = models.UUIDField(null=True, blank=True)
+#     producer_enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, related_name='producer_vetd_set', verbose_name='предприятие-получатель')
+
+#     product_type = models.IntegerField(choices=PRODUCT_TYPES, verbose_name='тип продукции')
+#     product_guid = models.UUIDField(null=True, blank=True, verbose_name='продукция (GUID)')
+#     product = models.ForeignKey(Product, null=True, blank=True, on_delete=models.PROTECT, verbose_name='продукция')
+#     subproduct_guid = models.UUIDField(null=True, blank=True, verbose_name='вид продукции (GUID)')
+#     subproduct = models.ForeignKey(SubProduct, null=True, blank=True, on_delete=models.PROTECT, verbose_name='вид продукции')
+    
+#     product_item_guid = models.UUIDField(null=True, blank=True, verbose_name='наименование продукции (GUID)')
+#     product_item_name = models.CharField(max_length=255, verbose_name='наименование продукции')
+#     product_item = models.ForeignKey(ProductItem, null=True, blank=True, on_delete=models.PROTECT, verbose_name='наименование продукции (справочник)')
+
+#     volume = models.DecimalField(decimal_places=6, max_digits=15, verbose_name='объем')
+#     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name='ЕИ')
+
+#     date_produced_1 = models.CharField(max_length=16, verbose_name='дата производства 1')
+#     date_produced_2 = models.CharField(max_length=16, blank=True, verbose_name='дата производства 2')
+#     date_produced = models.DateTimeField(verbose_name='дата производства')  # минимальная дата в интервале
+
+#     date_expiry_1 = models.CharField(max_length=16, verbose_name='срок годности 1')
+#     date_expiry_2 = models.CharField(max_length=16, blank=True, verbose_name='срок годности 2')
+#     date_expiry = models.DateTimeField(verbose_name='срок годности')  # минимальная дата в интервале
+
+#     is_perishable = models.BooleanField(verbose_name='скоропорт')
+
+#     origin_country = models.CharField(max_length=255, null=True, blank=True, verbose_name='страна происхождения')
+#     producer_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='наименование производителя')
+
+
+#     @property
+#     def date_produced_display(self):
+#         return self.date_produced_1 + ( f' - {self.date_produced_2}' if self.date_produced_2 else '')
+    
+#     @property
+#     def date_expiry_display(self):
+#         return self.date_expiry_1 + ( f' - {self.date_expiry_2}' if self.date_expiry_2 else '')
+    
+#     def __str__(self):
+#         return f'{self.uuid} {self.product_item_name} - {self.volume}'
+    
+#     class Meta:
+#         verbose_name = 'ветеринарный документ'
+#         verbose_name_plural = 'ветеринарные документы'
+#         ordering = ['-date_updated']
+
+STOCK_ENTRY_STATUS_CHOICES = (
+    (100, 'Запись создана'),
+    (101, 'Гашение ВС (импорт)'),
+    (102, 'Гашение ВСД'),
+    (103, 'Производство'),
+    (104, 'Справка о здоровье дойных животных'),
+    (105, 'Аннулирование ВСД или транзакции'),
+    (106, 'Гашение бумажного ВСД'),
+    (110, 'Объединение'),
+    (120, 'Разделение'),
+    (200, 'Внесены изменения'),
+    (201, 'Запись аннулирована'),
+    (202, 'Списание'),
+    (203, 'Редактирование производства'),
+    (204, 'Заключение по результатам ВСЭ'),
+    (230, 'Обновление в результате присоединения'),
+    (231, 'Обновление в результате присоединения'),
+    (240, 'Обновление в результате отделения'),
+    (250, 'Восстановление после удаления'),
+    (260, 'Пометка на удаление'),
+    (300, 'Перемещение в другую группу'),
+    (400, 'Запись удалена'),
+    (410, 'Удаление в результате объединения'),
+    (420, 'Удаление в результате разделения'),
+    (430, 'Удаление в результате присоединения'),
     )
 
+class StockEntryMain(models.Model):
+    '''Головная запись складского журнала с доп. информацией'''
+    guid = models.UUIDField(unique=True, db_index=True)
+    is_populated = models.BooleanField(default=False, verbose_name='данные заполнены')
+    initial_status = models.IntegerField(null=True, blank=True, choices=STOCK_ENTRY_STATUS_CHOICES, verbose_name='статус версии')
+    date_created = models.DateTimeField(null=True, blank=True, verbose_name='дата создания')
+    initial_volume = models.DecimalField(decimal_places=6, max_digits=15, null=True, blank=True, verbose_name='объем')
+    source_be_guid = models.UUIDField(null=True)
+    source_be_name = models.TextField(max_length=255, blank=True, verbose_name='хозяйствующий субъект - источник')
+    source_ent_guid = models.UUIDField(null=True)
+    source_ent_name = models.TextField(max_length=255, blank=True, verbose_name='предприятие - источник')
+    comment_important = models.BooleanField(default=False, verbose_name='комментарий важен')
+    comment_text = models.TextField(max_length=255, blank=True, verbose_name='текст комментария')
+
+    def __str__(self):
+        return str(self.guid) + (f' {self.source_ent_name} - {self.initial_volume}' if self.is_populated else ' ???')
+    
+    class Meta:
+        verbose_name = 'головная запись складского журнала'
+        verbose_name_plural = 'головные записи складского журнала'
+        ordering = ['-date_created']
+    
+
+class StockEntry(models.Model):
+    '''Версии записей складского журнала'''
+    main = models.ForeignKey(StockEntryMain, on_delete=models.PROTECT, verbose_name='головная запись')
     enterprise = models.ForeignKey(Enterprise, on_delete=models.PROTECT, verbose_name='предприятие')
     guid = models.UUIDField(db_index=True)
     uuid = models.UUIDField(unique=True, db_index=True)
     is_active = models.BooleanField(verbose_name='активная')
     is_last = models.BooleanField(verbose_name='последняя')
-    status = models.IntegerField(choices=STATUS_CHOICES, verbose_name='статус версии')
+    status = models.IntegerField(choices=STOCK_ENTRY_STATUS_CHOICES, verbose_name='статус версии')
     date_created = models.DateTimeField(verbose_name='дата создания')
     date_updated = models.DateTimeField(verbose_name='дата обновления')
     previous_uuid = models.UUIDField(null=True, blank=True, verbose_name='UUID предыдущей версии')
@@ -371,7 +523,8 @@ class StockEntry(models.Model):
     
     def date_expiry_group(self) -> str:
         EXPIRY_GROUPS = (
-            (0, 'Просрочена'),
+            (-1, 'Просрочена'),
+            (0, 'Сегодня'),
             (7, 'Менее 7 дней'),
             (30, 'Менее 30 дней'),
         )
@@ -383,7 +536,7 @@ class StockEntry(models.Model):
 
     def date_expiry_class(self) -> str:
         CLASS_VALUES = (
-            (0, 'text-danger'),
+            (-1, 'text-danger'),
             (7, 'text-warning'),
         )
         if not self.volume:
@@ -392,10 +545,7 @@ class StockEntry(models.Model):
         for val, class_name in CLASS_VALUES:
             if days_to_expiry <= val:
                 return class_name
-        return ''
-
-    def get_comment(self):
-        return StockEntryComment.objects.filter(stock_entry_guid=self.guid).first()    
+        return ''   
 
     def __str__(self):
         return f'{self.entry_number} {self.product_item_name} - {self.volume}'
@@ -470,21 +620,21 @@ class StockEntryVetDocument(models.Model):
         return '-'.join(uuid_str[0+i:4+i] for i in range(0, len(uuid_str), 4))
 
     def __str__(self):
-        return self.uuid
+        return str(self.uuid)
     
     class Meta:
         verbose_name = 'вет. документ'
         verbose_name_plural = 'вет. документы'
 
 
-class StockEntryComment(models.Model):
-    stock_entry_guid = models.UUIDField(unique=True, db_index=True, verbose_name='GUID записи журнала')
-    important = models.BooleanField(verbose_name='важно')
-    text = models.CharField(max_length=255, verbose_name='текст')
+# class StockEntryComment(models.Model):
+#     stock_entry_guid = models.UUIDField(unique=True, db_index=True, verbose_name='GUID записи журнала')
+#     important = models.BooleanField(verbose_name='важно')
+#     text = models.CharField(max_length=255, verbose_name='текст')
 
-    def __str__(self):
-        return self.text
+#     def __str__(self):
+#         return self.text
     
-    class Meta:
-        verbose_name = 'комментарий записи журнала'
-        verbose_name_plural = 'комментарии записи журнала'
+#     class Meta:
+#         verbose_name = 'комментарий записи журнала'
+#         verbose_name_plural = 'комментарии записи журнала'

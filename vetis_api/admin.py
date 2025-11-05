@@ -61,6 +61,11 @@ class StockEntryVetDocumentInline(admin.TabularInline):
 class StockEntryAdmin(admin.ModelAdmin):
     list_display = ['product_item_name', 'product_type', 'enterprise', 'volume']
     inlines = [PackageInline, StockEntryVetDocumentInline]
+    search_fields = ['entry_number']
+
+# @admin.register(StockEntryMain)
+# class StockEntryMainAdmin(admin.ModelAdmin):
+#     list_display = ['product_item_name', 'vetd_type', 'volume']
 
 @admin.register(PackingType)
 class PackingTypeAdmin(admin.ModelAdmin):

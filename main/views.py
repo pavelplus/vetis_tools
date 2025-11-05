@@ -17,7 +17,8 @@ from vetis_api.tasks import (
     reload_product_items,
     reload_product_subproduct,
     update_stock_entries,
-    update_stock_entry_history
+    update_stock_entry_history,
+    update_stock_entry_main_records
     )
 from .util import build_url
 from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm, StockEntryCommentForm
@@ -29,7 +30,7 @@ def index(request):
         is_active=True,
         volume__gt=0,
         date_expiry__lte=(datetime.now(tz=TZ_MOSCOW)+timedelta(days=30))
-        ).order_by('date_expiry')
+        ).select_related('main').order_by('date_expiry')
     
     context = {
         'stock_entries_expiry': stock_entries_expiry
@@ -45,7 +46,7 @@ def select_workspace(request):
     if request.headers.get('HX-Request', False):
         get_be_id = request.GET.get('business_entity', 0) or 0
         form = WorkspaceSelectionForm()
-        form.fields['enterprise'].queryset = Enterprise.objects.filter(business_entity_id=get_be_id)
+        form.fields['enterprise'].queryset = Enterprise.objects.filter(business_entity_id=get_be_id, is_allowed=True)
         context = {
             'form': form,
         }
@@ -55,7 +56,7 @@ def select_workspace(request):
         post_be_id = request.POST.get('business_entity', 0)
         post_ent_id = request.POST.get('enterprise', 0)
         form = WorkspaceSelectionForm(request.POST)
-        form.fields['enterprise'].queryset = Enterprise.objects.filter(business_entity_id=post_be_id)
+        form.fields['enterprise'].queryset = Enterprise.objects.filter(business_entity_id=post_be_id, is_allowed=True)
         if form.is_valid():
             be = get_object_or_404(BusinessEntity, id=post_be_id)
             if post_ent_id:
@@ -166,7 +167,7 @@ def stock_entries(request):
     if request.method == 'POST':
         form = StockEntriesFilterForm(request.POST)
         if form.is_valid():
-            stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True).order_by('date_expiry', '-entry_number')
+            stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True).select_related('main').order_by('date_expiry', '-entry_number')
             if form.cleaned_data['product']:
                 stock_entries = stock_entries.filter(product= form.cleaned_data['product'])
             if form.cleaned_data['search_query']:
@@ -220,35 +221,29 @@ def stock_entry_detail(request, id):
 
     stock_entry_history = StockEntry.objects.filter(guid=stock_entry.guid).order_by('date_created')
 
-    comment = StockEntryComment.objects.filter(stock_entry_guid=stock_entry.guid).first()
+    # comment = StockEntryComment.objects.filter(stock_entry_guid=stock_entry.guid).first()
 
     if request.method == 'POST':
         comment_form = StockEntryCommentForm(request.POST)
         if comment_form.is_valid():
             if comment_form.cleaned_data['text']:
-                if comment is None:
-                    comment = StockEntryComment()
-
-                comment.stock_entry_guid = stock_entry.guid
-                comment.important = comment_form.cleaned_data['important']
-                comment.text = comment_form.cleaned_data['text']
-                comment.save()
+                stock_entry.main.comment_text = comment_form.cleaned_data['text']
+                stock_entry.main.comment_important= comment_form.cleaned_data['important']
                 messages.add_message(request, messages.INFO, 'Комментарий сохранен.')
             else:
-                if comment is not None:
-                    comment.delete()
+                stock_entry.main.comment_text = ''
+                stock_entry.main.comment_important = False
                 messages.add_message(request, messages.WARNING, 'Комментарий удален.')
 
+            stock_entry.main.save()
             return redirect(reverse('main:stock_entry_detail', kwargs={'id': stock_entry.id}))
 
     else:
         comment_form = StockEntryCommentForm()
-        if comment is not None:
-            comment_form.initial={'important': comment.important, 'text': comment.text}
+        comment_form.initial={'important': stock_entry.main.comment_important, 'text': stock_entry.main.comment_text}
 
     context = {
         'stock_entry': stock_entry,
-        'comment': comment,
         'comment_form': comment_form,
         'stock_entry_history': stock_entry_history,
     }
@@ -324,6 +319,10 @@ def vetis_task(request):
                 task_id = update_stock_entry_history.delay(credentials_id, request.user.vetis_login, stock_entry_id)
                 next = reverse('main:stock_entry_detail', kwargs={'id': stock_entry_id})
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
+            
+            if vetis_task == 'update_stock_entry_main_records' and request.user.vetis_login:
+                task_id = update_stock_entry_main_records.delay(credentials_id, request.user.vetis_login, ent_id)
+                return redirect(build_url('main:vetis_task', task_id=task_id))
 
         else:
             messages.add_message(request, messages.ERROR, 'Не выбрано подключение!')
