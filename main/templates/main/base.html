@@ -4,11 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>
-      {% block title %}
-        Инструменты Ветис
-      {% endblock %}
-    </title>
+    <title>{% block title %}Инструменты Ветис{% endblock %}</title>
     <!-- <link rel="icon" href="./favicon.ico" type="image/x-icon"> -->
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous" />
@@ -90,7 +86,7 @@
       </nav>
     {% endblock %}
 
-    {% block workspace%}
+    {% block workspace %}
       <div class="bg-body-secondary">
         <div class="container-md text-center text-truncate">
           <a class="link-warning link-underline link-underline-opacity-0 link-opacity-75 link-underline-opacity-100-hover link-opacity-100-hover" style="font-size: 80%;" href="{% url 'main:select_workspace' %}">

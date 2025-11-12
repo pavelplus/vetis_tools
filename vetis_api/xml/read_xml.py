@@ -80,6 +80,6 @@ def try_to_read():
     print(business_entity_xml.find('dt:fullName', NAMESPACES))
     print(business_entity_xml.find('dt:fio', NAMESPACES))
 
-    name_xml = business_entity_xml.find('dt:name', NAMESPACES) or business_entity_xml.find('dt:fullName', NAMESPACES) or business_entity_xml.find('dt:fio', NAMESPACES)
+    name_xml = get_not_none_text(business_entity_xml.find('dt:name', NAMESPACES), business_entity_xml.find('dt:fullName', NAMESPACES), business_entity_xml.find('dt:fio', NAMESPACES), default='нет имени')
 
     print(name_xml)

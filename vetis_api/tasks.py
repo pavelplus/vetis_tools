@@ -39,13 +39,11 @@ def send_soap_request(soap_request: AbstractRequest, credentials: VetisCredentia
 
     endpoint_url = ENDPOINTS_PROD[soap_request.endpoint_name] if credentials.is_productive else ENDPOINTS_TEST[soap_request.endpoint_name]
 
-    # print(f'send_soap_request: endpoint_url={endpoint_url}, body={body}')
-    # print(f'send_soap_request: headers={headers}')
-    # print(f'send_soap_request: body={body}')
-
-    # return None
-
     for try_num in range(3):
+
+        if try_num:
+            sleep(5*try_num)
+
         try:
             response = requests.post(
                     url=endpoint_url,
@@ -56,11 +54,10 @@ def send_soap_request(soap_request: AbstractRequest, credentials: VetisCredentia
         except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
             response = None
         
-        if response is None:
-            print(f'Connection error on try #{try_num+1}')
-            sleep(5 + 5*try_num)
-        else:
+        if response is not None:
             break
+        else:
+            print(f'Connection error on try #{try_num+1}')
 
     if response is None:
         raise RuntimeError('Не удалось установить соединение для отправки soap запроса')
@@ -659,7 +656,10 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
 
     # volume
 
-    stock_entry.volume = Decimal(batch_xml.find('vd:volume', NAMESPACES).text)
+    if stock_entry.status in [201]:  # запись аннулирована
+        stock_entry.volume = 0
+    else:
+        stock_entry.volume = Decimal(batch_xml.find('vd:volume', NAMESPACES).text)
 
     # unit
     
@@ -990,7 +990,7 @@ def update_stock_entry_main(stock_entry_main: StockEntryMain, credentials: Vetis
         if first_stock_entry is None:
             raise RuntimeError(f'Не удалось загрузить полную историю для записи с id={first_stock_entry.id}')
     
-    if first_stock_entry.status in [102]:
+    if first_stock_entry.status in [102]:  # Гашение ВСД
         print('Пробуем загрузить данные из вет. документа')
         vet_document = first_stock_entry.stockentryvetdocument_set.first()
 
