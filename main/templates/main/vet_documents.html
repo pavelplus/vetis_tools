@@ -1,0 +1,83 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Ветеринарные документы{% endblock %}
+
+{% block content %}
+  {% load django_bootstrap5 %}
+  <div class="d-flex justify-content-between align-items-end">
+    <h3 class="mt-3">Ветеринартные документы</h3>
+    <div><small class="text-secondary">
+      <i class="bi bi-calendar-check"></i> Документы обновлены: {{ vetd_last_updated|default:"---" }}
+      <br />
+      <i class="bi bi-calendar-check"></i> Последнее событие: {{ vetd_records_last_updated|default:"---"  }}
+    </small></div>
+    <form method="POST" action="{% url 'main:vetis_task' %}">
+      {% csrf_token %}
+      <div class="dropdown">
+        <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-gear"></i></button>
+        <ul class="dropdown-menu">
+          <li>
+            <button class="dropdown-item" name="vetis_task" value="update_vet_documents" onclick="return window.confirm('Будут загружены данные с сайта Ветис. Вы уверены?')">Обновить ветеринарные документы</button>
+          </li>
+        </ul>
+      </div>
+    </form>
+  </div>
+
+  {% comment %} <form method="POST" name="search_form" class="mb-3">
+    {% csrf_token %}
+    <div class="row align-items-end">
+      {% bootstrap_field form.product wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.search_query wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.has_quantity wrapper_class='col-lg-1 mb-3 mb-lg-0' %}
+      <div class="col-lg-3 d-flex justify-content-end">
+        <button class="btn btn-primary" name="search" type="submit">Применить</button>
+        <a class="ms-1 btn {{ btn_filters_class }}" data-bs-toggle="collapse" href="#collapseFilter" title="Еще фильтры">
+          <i class="bi bi-funnel"></i>
+        </a>
+      </div>
+    </div>
+    <div class="collapse" id="collapseFilter">
+      <div class="row mt-3">
+        {% bootstrap_field form.date_produced_begin wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.date_produced_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.date_created_begin wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.date_created_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+      </div>
+    </div>
+  </form> {% endcomment %}
+  {% for vetd in vet_documents %}
+    {% if forloop.first %}
+      <p class="my-0 text-secondary border-bottom"><small>Показано записей: {{ vet_documents.count }}</small></p>
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th scope="col">Дата, тип</th>
+            <th scope="col">Субъекты</th>
+            <th scope="col">Продукция</th>
+            <th scope="col">Объем</th>
+          </tr>
+        </thead>
+        <tbody>
+    {% endif %}
+        <tr>
+          <td>
+            <div>{{ vetd.issue_date|date:'d.m.Y' }}</div>
+            <div>{{ vetd.get_vetd_type_display }} <span class="badge text-bg-secondary">{{ vetd.get_vetd_status_display }}</span></div>
+          </td>
+          <td>
+            {% if vetd.consignor_ent_name %}<div style="font-size: 75%;" class="text-secondary"><i class="bi bi-arrow-left"></i> {{ vetd.consignor_ent_name|truncatechars:100 }}</div>{% endif %}
+            {% if vetd.consignee_ent_name %}<div style="font-size: 75%;" class="text-secondary"><i class="bi bi-arrow-right"></i> {{ vetd.consignee_ent_name|truncatechars:100 }}</div>{% endif %}
+            {% if vetd.producer_ent_name %}<div style="font-size: 75%;" class="text-secondary"><i class="bi bi-hammer"></i> {{ vetd.producer_ent_name|truncatechars:100 }}</div>{% endif %}
+          </td>
+          <td>{{ vetd.product_item_name }}</td>
+          <td>{{ vetd.volume.normalize }}&nbsp;{{ vetd.unit.name }}</td>
+        </tr>
+    {% if forloop.last %}
+        </tbody>
+      </table>
+    {% endif %}
+    {% empty %}
+    <div class="alert alert-info mt-3" role="alert">Нет записей...</div>
+  {% endfor %}
+{% endblock %}

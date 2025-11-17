@@ -88,6 +88,7 @@ class Enterprise(models.Model):
         (3, 'СББЖ'),
         (4, 'судно'),
     )
+
     business_entity = models.ForeignKey(BusinessEntity, on_delete=models.PROTECT, verbose_name='хозяйствующий субъект')
     guid = models.UUIDField(editable=True, unique=True, db_index=True)
     uuid = models.UUIDField(editable=True, unique=True)
@@ -98,6 +99,7 @@ class Enterprise(models.Model):
     is_active = models.BooleanField(default=True, verbose_name='активно')
     is_allowed = models.BooleanField(default=False, verbose_name='разрешено работать через АПИ')
     stock_entries_last_updated = models.DateTimeField(null=True, blank=True, verbose_name='последнее обновление журнала')
+    vet_documents_last_updated = models.DateTimeField(null=True, blank=True, verbose_name='последнее обновление вет. документов')
 
     def __str__(self):
         return f'{self.name} ({self.address})'
@@ -321,99 +323,105 @@ class ComplexDate():
         return True
 
 
-# class VetDocument(models.Model):
-#     VETDFORM_CHOICES = (
-#         ('CERTCU1', 'Форма 1 ветеринарного сертификата ТС'),
-#         ('LIC1', 'Форма 1 ветеринарного свидетельства'),
-#         ('CERTCU2', 'Форма 2 ветеринарного сертификата ТС'),
-#         ('LIC2', 'Форма 2 ветеринарного свидетельства'),
-#         ('CERTCU3', 'Форма 3 ветеринарного сертификата ТС'),
-#         ('LIC3', 'Форма 3 ветеринарного свидетельства'),
-#         ('NOTE4', 'Форма 4 ветеринарной справки'),
-#         ('CERT5I', 'Форма 5i ветеринарного сертификата'),
-#         ('CERT61', 'Форма 6.1 ветеринарного сертификата'),
-#         ('CERT62', 'Форма 6.2 ветеринарного сертификата'),
-#         ('CERT63', 'Форма 6.3 ветеринарного сертификата'),
-#         ('PRODUCTIVE', 'Форма производственного ветеринарного сертификата'),
-#     )
+class VetDocument(models.Model):
+    VETDFORM_CHOICES = (
+        ('CERTCU1', 'Форма 1 ветеринарного сертификата ТС'),
+        ('LIC1', 'Форма 1 ветеринарного свидетельства'),
+        ('CERTCU2', 'Форма 2 ветеринарного сертификата ТС'),
+        ('LIC2', 'Форма 2 ветеринарного свидетельства'),
+        ('CERTCU3', 'Форма 3 ветеринарного сертификата ТС'),
+        ('LIC3', 'Форма 3 ветеринарного свидетельства'),
+        ('NOTE4', 'Форма 4 ветеринарной справки'),
+        ('CERT5I', 'Форма 5i ветеринарного сертификата'),
+        ('CERT61', 'Форма 6.1 ветеринарного сертификата'),
+        ('CERT62', 'Форма 6.2 ветеринарного сертификата'),
+        ('CERT63', 'Форма 6.3 ветеринарного сертификата'),
+        ('PRODUCTIVE', 'Форма производственного ветеринарного сертификата'),
+    )
 
-#     VETDTYPE_CHOICES = (
-#         ('INCOMING', 'Входящий ВСД'),
-#         ('OUTGOING', 'Исходящий ВСД'),
-#         ('PRODUCTIVE', 'Производственный ВСД'),
-#         ('RETURNABLE', 'Возвратный ВСД'),
-#         ('TRANSPORT', 'Транспортный ВСД'),
-#     )
+    VETDTYPE_CHOICES = (
+        ('INCOMING', 'Входящий ВСД'),
+        ('OUTGOING', 'Исходящий ВСД'),
+        ('PRODUCTIVE', 'Производственный ВСД'),
+        ('RETURNABLE', 'Возвратный ВСД'),
+        ('TRANSPORT', 'Транспортный ВСД'),
+    )
 
-#     VETDSTATUS_CHOICES = (
-#         ('CONFIRMED', 'Оформлен'),
-#         ('WITHDRAWN', 'Аннулирован'),
-#         ('UTILIZED', 'Погашен'),
-#         ('FINALIZED', 'Закрыт'),
-#     )
+    VETDSTATUS_CHOICES = (
+        ('CONFIRMED', 'Оформлен'),
+        ('WITHDRAWN', 'Аннулирован'),
+        ('UTILIZED', 'Погашен'),
+        ('FINALIZED', 'Закрыт'),
+    )
 
-#     enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='предприятие')
-#     uuid = models.UUIDField(unique=True, db_index=True)
-#     issue_date = models.DateField(verbose_name='дата оформления')
-#     vetd_form = models.CharField(max_length=10, choices=VETDFORM_CHOICES, verbose_name='форма')
-#     vetd_type = models.CharField(max_length=10, choices=VETDTYPE_CHOICES, verbose_name='тип')
-#     vetd_status = models.CharField(max_length=10, choices=VETDSTATUS_CHOICES, verbose_name='статус')
-#     is_finalized = models.BooleanField(default=False, verbose_name='закрыт')
-#     date_updated = models.DateTimeField(null=True, blank=True, verbose_name='дата изменения статуса')
-#     status_change = models.TextField(blank=True, verbose_name='информация об изменении статуса')
+    # enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='предприятие')
+    uuid = models.UUIDField(unique=True, db_index=True)
+    issue_date = models.DateField(verbose_name='дата оформления')
+    vetd_form = models.CharField(max_length=10, choices=VETDFORM_CHOICES, verbose_name='форма')
+    vetd_type = models.CharField(max_length=10, choices=VETDTYPE_CHOICES, verbose_name='тип')
+    vetd_status = models.CharField(max_length=10, choices=VETDSTATUS_CHOICES, verbose_name='статус')
+    is_finalized = models.BooleanField(default=False, verbose_name='закрыт')
+    date_updated = models.DateTimeField(null=True, blank=True, verbose_name='дата изменения статуса')
+    status_change = models.TextField(blank=True, verbose_name='информация об изменении статуса')
 
-#     consignor_be_guid = models.UUIDField(null=True, blank=True)
-#     consignor_ent_guid = models.UUIDField(null=True, blank=True)
-#     consignor_enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, related_name='consignor_vetd_set', verbose_name='предприятие-отправитель')
-#     consignee_be_guid = models.UUIDField(null=True, blank=True)
-#     consignee_ent_guid = models.UUIDField(null=True, blank=True)
-#     consignee_enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, related_name='consignee_vetd_set', verbose_name='предприятие-получатель')
-#     producer_be_guid = models.UUIDField(null=True, blank=True)
-#     producer_ent_guid = models.UUIDField(null=True, blank=True)
-#     producer_enterprise = models.ForeignKey(Enterprise, null=True, blank=True, on_delete=models.SET_NULL, related_name='producer_vetd_set', verbose_name='предприятие-получатель')
+    consignor_be_guid = models.UUIDField(null=True, blank=True, verbose_name='GUID субъекта-отправителя')
+    consignor_be_name = models.CharField(blank=True, max_length=255, verbose_name='наименование субъекта-отправителя')
+    consignor_ent_guid = models.UUIDField(null=True, blank=True, db_index=True, verbose_name='GUID предприятия-отправителя')
+    consignor_ent_name = models.CharField(blank=True, max_length=255, verbose_name='наименование предприятия-отправителя')
 
-#     product_type = models.IntegerField(choices=PRODUCT_TYPES, verbose_name='тип продукции')
-#     product_guid = models.UUIDField(null=True, blank=True, verbose_name='продукция (GUID)')
-#     product = models.ForeignKey(Product, null=True, blank=True, on_delete=models.PROTECT, verbose_name='продукция')
-#     subproduct_guid = models.UUIDField(null=True, blank=True, verbose_name='вид продукции (GUID)')
-#     subproduct = models.ForeignKey(SubProduct, null=True, blank=True, on_delete=models.PROTECT, verbose_name='вид продукции')
+    consignee_be_guid = models.UUIDField(null=True, blank=True, verbose_name='GUID субъекта-получателя')
+    consignee_be_name = models.CharField(blank=True, max_length=255, verbose_name='наименование субъекта-получателя')
+    consignee_ent_guid = models.UUIDField(null=True, blank=True, db_index=True, verbose_name='GUID предприятия-получателя')
+    consignee_ent_name = models.CharField(blank=True, max_length=255, verbose_name='наименование предприятия-получателя')
+
+    producer_be_guid = models.UUIDField(null=True, blank=True, verbose_name='GUID субъекта-производителя')
+    producer_be_name = models.CharField(blank=True, max_length=255, verbose_name='наименование субъекта-производителя')
+    producer_ent_guid = models.UUIDField(null=True, blank=True, db_index=True, verbose_name='GUID предприятия-производителя')
+    producer_ent_name = models.CharField(blank=True, max_length=255, verbose_name='наименование предприятия-производителя')
     
-#     product_item_guid = models.UUIDField(null=True, blank=True, verbose_name='наименование продукции (GUID)')
-#     product_item_name = models.CharField(max_length=255, verbose_name='наименование продукции')
-#     product_item = models.ForeignKey(ProductItem, null=True, blank=True, on_delete=models.PROTECT, verbose_name='наименование продукции (справочник)')
-
-#     volume = models.DecimalField(decimal_places=6, max_digits=15, verbose_name='объем')
-#     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name='ЕИ')
-
-#     date_produced_1 = models.CharField(max_length=16, verbose_name='дата производства 1')
-#     date_produced_2 = models.CharField(max_length=16, blank=True, verbose_name='дата производства 2')
-#     date_produced = models.DateTimeField(verbose_name='дата производства')  # минимальная дата в интервале
-
-#     date_expiry_1 = models.CharField(max_length=16, verbose_name='срок годности 1')
-#     date_expiry_2 = models.CharField(max_length=16, blank=True, verbose_name='срок годности 2')
-#     date_expiry = models.DateTimeField(verbose_name='срок годности')  # минимальная дата в интервале
-
-#     is_perishable = models.BooleanField(verbose_name='скоропорт')
-
-#     origin_country = models.CharField(max_length=255, null=True, blank=True, verbose_name='страна происхождения')
-#     producer_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='наименование производителя')
-
-
-#     @property
-#     def date_produced_display(self):
-#         return self.date_produced_1 + ( f' - {self.date_produced_2}' if self.date_produced_2 else '')
+    product_type = models.IntegerField(choices=PRODUCT_TYPES, verbose_name='тип продукции')
+    product_guid = models.UUIDField(null=True, blank=True, verbose_name='продукция (GUID)')
+    product = models.ForeignKey(Product, null=True, blank=True, on_delete=models.PROTECT, verbose_name='продукция')
+    subproduct_guid = models.UUIDField(null=True, blank=True, verbose_name='вид продукции (GUID)')
+    subproduct = models.ForeignKey(SubProduct, null=True, blank=True, on_delete=models.PROTECT, verbose_name='вид продукции')
     
-#     @property
-#     def date_expiry_display(self):
-#         return self.date_expiry_1 + ( f' - {self.date_expiry_2}' if self.date_expiry_2 else '')
+    product_item_guid = models.UUIDField(null=True, blank=True, verbose_name='наименование продукции (GUID)')
+    product_item_name = models.CharField(max_length=255, verbose_name='наименование продукции')
+    product_item = models.ForeignKey(ProductItem, null=True, blank=True, on_delete=models.PROTECT, verbose_name='наименование продукции (справочник)')
+
+    volume = models.DecimalField(decimal_places=6, max_digits=15, verbose_name='объем')
+    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name='ЕИ')
+
+    date_produced_1 = models.CharField(max_length=16, verbose_name='дата производства 1')
+    date_produced_2 = models.CharField(max_length=16, blank=True, verbose_name='дата производства 2')
+    date_produced = models.DateTimeField(verbose_name='дата производства')  # минимальная дата в интервале
+
+    date_expiry_1 = models.CharField(max_length=16, verbose_name='срок годности 1')
+    date_expiry_2 = models.CharField(max_length=16, blank=True, verbose_name='срок годности 2')
+    date_expiry = models.DateTimeField(verbose_name='срок годности')  # минимальная дата в интервале
+
+    is_perishable = models.BooleanField(verbose_name='скоропорт')
+
+    origin_country = models.CharField(max_length=255, null=True, blank=True, verbose_name='страна происхождения')
+    producer_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='наименование производителя')
+
+
+    @property
+    def date_produced_display(self):
+        return self.date_produced_1 + ( f' - {self.date_produced_2}' if self.date_produced_2 else '')
     
-#     def __str__(self):
-#         return f'{self.uuid} {self.product_item_name} - {self.volume}'
+    @property
+    def date_expiry_display(self):
+        return self.date_expiry_1 + ( f' - {self.date_expiry_2}' if self.date_expiry_2 else '')
     
-#     class Meta:
-#         verbose_name = 'ветеринарный документ'
-#         verbose_name_plural = 'ветеринарные документы'
-#         ordering = ['-date_updated']
+    def __str__(self):
+        return f'{self.uuid} {self.product_item_name} - {self.volume}'
+    
+    class Meta:
+        verbose_name = 'ветеринарный документ'
+        verbose_name_plural = 'ветеринарные документы'
+        ordering = ['-date_updated']
+
 
 STOCK_ENTRY_STATUS_CHOICES = (
     (100, 'Запись создана'),

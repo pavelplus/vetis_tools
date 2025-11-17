@@ -3,6 +3,7 @@ import json
 from celery.result import AsyncResult
 from datetime import datetime, time
 
+from django.db.models import Q
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
@@ -13,12 +14,14 @@ from django.urls import reverse
 from vetis_api.models import *
 from vetis_api.tasks import (
     test_task,
+    maintenance_task,
     reload_enterprises,
     reload_product_items,
     reload_product_subproduct,
     update_stock_entries,
     update_stock_entry_history,
-    update_stock_entry_main_records
+    update_stock_entry_main_records,
+    update_vet_documents
     )
 from .util import build_url
 from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm, StockEntryCommentForm
@@ -250,6 +253,41 @@ def stock_entry_detail(request, id):
     return TemplateResponse(request, 'main/stock_entry_detail.html', context=context)
 
 
+def vet_documents(request):
+    ent_id = request.session.get('enterprise', 0)
+
+    if not ent_id:
+        messages.add_message(request, messages.WARNING, 'Не выбрано активное предприятие!')
+        return redirect('main:select_workspace')
+    
+    enterprise = get_object_or_404(Enterprise, id=ent_id)
+
+    ent_filter = Q(consignor_ent_guid=enterprise.guid) | Q(consignee_ent_guid=enterprise.guid) | Q(producer_ent_guid=enterprise.guid)
+
+    last_updated_vetd = VetDocument.objects.filter(ent_filter).order_by('-date_updated').first()
+    if last_updated_vetd is not None:
+        vetd_records_last_updated = last_updated_vetd.date_updated.astimezone(TZ_MOSCOW).strftime('%d.%m.%Y %H:%M:%S')
+    else:
+        vetd_records_last_updated = None
+
+    if enterprise.vet_documents_last_updated:
+        vetd_last_updated = enterprise.vet_documents_last_updated.astimezone(TZ_MOSCOW).strftime('%d.%m.%Y %H:%M:%S')
+    else:
+        vetd_last_updated = None
+
+    has_collapsed_filters = False
+
+    vet_documents = VetDocument.objects.filter(ent_filter).order_by('-issue_date', '-date_updated')
+
+
+    context = {
+        'vet_documents': vet_documents,
+        'vetd_last_updated': vetd_last_updated,
+        'vetd_records_last_updated': vetd_records_last_updated,
+    }
+    return TemplateResponse(request, 'main/vet_documents.html', context=context)
+
+
 # htmx partial render
 def task_info(request):
 
@@ -293,6 +331,10 @@ def vetis_task(request):
             messages.add_message(request, messages.ERROR, 'Для пользователя не задан логин Ветис!')
 
         if credentials_id:
+            if vetis_task == 'maintenance_task':
+                task_id = maintenance_task.delay(credentials_id)
+                return redirect(build_url('main:vetis_task', task_id=task_id))
+
             if vetis_task == 'reload_enterprises':
                 business_entity_id = int(request.POST.get('business_entity_id'))
                 task_id = reload_enterprises.delay(credentials_id, business_entity_id)
@@ -323,6 +365,11 @@ def vetis_task(request):
             if vetis_task == 'update_stock_entry_main_records' and request.user.vetis_login:
                 task_id = update_stock_entry_main_records.delay(credentials_id, request.user.vetis_login, ent_id)
                 return redirect(build_url('main:vetis_task', task_id=task_id))
+            
+            if vetis_task == 'update_vet_documents' and request.user.vetis_login:
+                task_id = update_vet_documents.delay(credentials_id, request.user.vetis_login, ent_id)
+                next = reverse('main:vet_documents')
+                return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
 
         else:
             messages.add_message(request, messages.ERROR, 'Не выбрано подключение!')

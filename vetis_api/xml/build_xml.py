@@ -59,6 +59,20 @@ class ProductItemByGuidRequest(AbstractRequest):
             'vetis_request': self
         }
         return render_to_string('vetis_api/xml/GetProductItemByGuid.xml', context)
+    
+
+class UnitByGuidRequest(AbstractRequest):
+    endpoint_name = 'DictionaryService'
+    soap_action = 'GetUnitByGuid'
+
+    def __init__(self, product_guid: str):
+        self.product_guid = product_guid
+
+    def get_xml(self) -> str:
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetProductByGuid.xml', context)
 
 
 class ProductItemListRequest(AbstractRequest):
@@ -217,6 +231,31 @@ class GetVetDocumentByUuidRequest(AbstractRequest):
             'vetis_request': self
         }
         return render_to_string('vetis_api/xml/GetVetDocumentByUuid.xml', context)
+    
+
+class GetVetDocumentChangesListRequest(AbstractRequest):
+
+    endpoint_name = 'ApplicationManagementService'
+    soap_action = 'submitApplicationRequest'
+
+    def __init__(self, enterprise_guid: str, begin_date: datetime, end_date: datetime, api_key: str, service_id: str, issuer_id: str, initiator_login: str, list_count: int = 1000, list_offset: int = 0):
+        self.enterprise_guid = enterprise_guid
+        self.begin_date = begin_date.astimezone(TZ_MOSCOW).strftime(VETIS_DATETIME_FORMAT)
+        self.end_date = end_date.astimezone(TZ_MOSCOW).strftime(VETIS_DATETIME_FORMAT)
+        self.api_key = api_key
+        self.service_id = service_id
+        self.issuer_id = issuer_id
+        self.initiator_login = initiator_login
+        self.list_count = list_count
+        self.list_offset = list_offset
+    
+    def get_xml(self):
+        self.issue_date = datetime.now().strftime(VETIS_DATETIME_FORMAT)
+        self.local_transaction_id = datetime.now().strftime('%Y%m%d-%H%M%S')
+        context = {
+            'vetis_request': self
+        }
+        return render_to_string('vetis_api/xml/GetVetDocumentChangesList.xml', context)
         
 
 class ReceiveApplicationResultRequest(AbstractRequest):
