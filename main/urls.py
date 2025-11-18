@@ -16,4 +16,5 @@ urlpatterns = [
     path('vetd/', views.vet_documents, name='vet_documents'),
     path('vetis-task/', views.vetis_task, name='vetis_task'),
     path('task-info/', views.task_info, name='task_info'),
+    path('statistics/', views.statistics, name='statistics'),
 ]

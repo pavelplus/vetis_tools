@@ -15,6 +15,12 @@
   {% else %}
   <div class="alert alert-info mt-3"> 
   {% endif %}
-    {{ task_result.result }}
+    {% if result_is_dict %}
+      {% for key, value in task_result.result.items %}
+        <div><span class="badge text-bg-secondary">{{ key }}</span> {{ value }}</div>
+      {% endfor %}
+    {% else %}
+      {{ task_result.result }}
+    {% endif %}
   </div>
 {% endif %}

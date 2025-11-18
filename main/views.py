@@ -15,13 +15,13 @@ from vetis_api.models import *
 from vetis_api.tasks import (
     test_task,
     maintenance_task,
-    reload_enterprises,
-    reload_product_items,
-    reload_product_subproduct,
-    update_stock_entries,
-    update_stock_entry_history,
-    update_stock_entry_main_records,
-    update_vet_documents
+    reload_enterprises_task,
+    reload_product_items_task,
+    reload_product_subproduct_task,
+    update_stock_entries_task,
+    update_stock_entry_history_task,
+    update_stock_entry_main_records_task,
+    update_vet_documents_task
     )
 from .util import build_url
 from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm, StockEntryCommentForm
@@ -277,7 +277,7 @@ def vet_documents(request):
 
     has_collapsed_filters = False
 
-    vet_documents = VetDocument.objects.filter(ent_filter).order_by('-issue_date', '-date_updated')
+    vet_documents = VetDocument.objects.filter(ent_filter).order_by('-issue_date', '-date_updated')[:200]
 
 
     context = {
@@ -293,6 +293,8 @@ def task_info(request):
 
     task_id = request.GET.get('task_id')
     task_result = AsyncResult(task_id)
+
+    print(f'typeof tast_result.result: {type(task_result.result)}')
     
     context = {}
     if task_result:
@@ -300,6 +302,7 @@ def task_info(request):
             'task_id': task_id,
             'task_ready': task_result.ready(),
             'task_result': task_result,
+            'result_is_dict': isinstance(task_result.result, dict),
             'tick': ('.'*10)[:datetime.now().second%10+1] if not task_result.ready() else '',
         }
 
@@ -337,37 +340,37 @@ def vetis_task(request):
 
             if vetis_task == 'reload_enterprises':
                 business_entity_id = int(request.POST.get('business_entity_id'))
-                task_id = reload_enterprises.delay(credentials_id, business_entity_id)
+                task_id = reload_enterprises_task.delay(credentials_id, business_entity_id)
                 next = reverse('main:business_entity_detail', args=[business_entity_id])
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
             
             if vetis_task == 'reload_product_items':
-                task_id = reload_product_items.delay(credentials_id, be.id)
+                task_id = reload_product_items_task.delay(credentials_id, be.id)
                 next = reverse('main:product_items')
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
             
             if vetis_task == 'reload_product_subproduct':
-                task_id = reload_product_subproduct.delay(credentials_id)
+                task_id = reload_product_subproduct_task.delay(credentials_id)
                 next = reverse('main:product_items')
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
             
             if vetis_task == 'update_stock_entries' and request.user.vetis_login:
-                task_id = update_stock_entries.delay(credentials_id, request.user.vetis_login, ent_id)
+                task_id = update_stock_entries_task.delay(credentials_id, request.user.vetis_login, ent_id)
                 next = reverse('main:stock_entries')
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
 
             if vetis_task == 'reload_stock_entry_history' and request.user.vetis_login:
                 stock_entry_id = int(request.POST.get('stock_entry_id'))
-                task_id = update_stock_entry_history.delay(credentials_id, request.user.vetis_login, stock_entry_id)
+                task_id = update_stock_entry_history_task.delay(credentials_id, request.user.vetis_login, stock_entry_id)
                 next = reverse('main:stock_entry_detail', kwargs={'id': stock_entry_id})
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
             
             if vetis_task == 'update_stock_entry_main_records' and request.user.vetis_login:
-                task_id = update_stock_entry_main_records.delay(credentials_id, request.user.vetis_login, ent_id)
+                task_id = update_stock_entry_main_records_task.delay(credentials_id, request.user.vetis_login, ent_id)
                 return redirect(build_url('main:vetis_task', task_id=task_id))
             
             if vetis_task == 'update_vet_documents' and request.user.vetis_login:
-                task_id = update_vet_documents.delay(credentials_id, request.user.vetis_login, ent_id)
+                task_id = update_vet_documents_task.delay(credentials_id, request.user.vetis_login, ent_id)
                 next = reverse('main:vet_documents')
                 return redirect(build_url('main:vetis_task', task_id=task_id, next=next))
 
@@ -380,3 +383,28 @@ def vetis_task(request):
     # display task info
     context = {}
     return TemplateResponse(request, 'main/vetis_task.html', context)
+
+
+def statistics(request):
+    database_records = {
+        'Хозяйствующие субъекты': BusinessEntity.objects.count(),
+        'Предприятия': Enterprise.objects.count(),
+        'Информация о прочих ХС': BusinessEntityInfo.objects.count(),
+        'Информация о прочих предприятиях': EnterpriseInfo.objects.count(),
+        'Информация о прочих предприятиях': EnterpriseInfo.objects.count(),
+        'Типы продукции (product)': Product.objects.count(),
+        'Продукция (subproduct)': SubProduct.objects.count(),
+        'Наименования продукции': ProductItem.objects.count(),
+        'Единицы измерения': Unit.objects.count(),
+        'Виды упаковок': PackingType.objects.count(),
+        'Записи журнала': StockEntryMain.objects.count(),
+        'Версии записей журнала': StockEntry.objects.count(),
+        'Ветеринарные документы': VetDocument.objects.count(),
+        'История запросов Ветис': ApiRequestsHistoryRecord.objects.count(),
+    }
+
+    context = {
+        'database_records': database_records
+    }
+
+    return TemplateResponse(request, 'main/statistics.html', context)

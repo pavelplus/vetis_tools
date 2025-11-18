@@ -12,7 +12,7 @@ from django.db import transaction
 
 from .models import *
 from .xml.build_xml import *
-from .xml.settings import NAMESPACES
+#from .xml.settings import NAMESPACES
 
 
 logger = logging.getLogger('vetis_tools')
@@ -133,14 +133,16 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
 
     response_xml = result_xml.find('./soapenv:Body/apldef:submitApplicationResponse', NAMESPACES)
 
-    status = response_xml.find('apl:application/apl:status', NAMESPACES).text
+    # status = response_xml.find('apl:application/apl:status', NAMESPACES).text
+    status = get_xml_text(response_xml, 'apl:application/apl:status')
 
     logger.debug(f'Статус ответа: {status}')
 
     if status != 'ACCEPTED':
         raise RuntimeError(f'Ошибка обработки запроса ({status})')
     
-    application_id = response_xml.find('apl:application/apl:applicationId', NAMESPACES).text
+    # application_id = response_xml.find('apl:application/apl:applicationId', NAMESPACES).text
+    application_id = get_xml_text(response_xml, 'apl:application/apl:applicationId')
 
     application_result_request = ReceiveApplicationResultRequest(api_key=credentials.api_key, issuer_id=credentials.issuer_id, application_id=application_id)
 
@@ -160,7 +162,8 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
 
         response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse', NAMESPACES)
 
-        status = response_xml.find('apl:application/apl:status', NAMESPACES).text
+        # status = response_xml.find('apl:application/apl:status', NAMESPACES).text
+        status = get_xml_text(response_xml, 'apl:application/apl:status')
 
         logger.debug(f'Статус в ответе: {status}')
 
@@ -174,9 +177,11 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
 
 @shared_task(bind=True)
 def test_task(this_task):
+
+    logger.debug(f'type of this_task {type(this_task)}, {this_task}')
     
     for i in range(0, 5):
-        this_task.update_state(state='PROGRESS', meta={'info': 'bla-bla-bla'})
+        this_task.update_state(state='PROGRESS', meta={'info': f'Processing test task {i+1}...'})
         logger.debug(f'Processing test task {i+1}...')
         sleep(1.0)
     logger.debug('Тестовая задача завершена')
@@ -184,8 +189,8 @@ def test_task(this_task):
     return 'Тестовая задача завершена успешно'
 
 
-@shared_task
-def maintenance_task(credentials_id: int):
+@shared_task(bind=True)
+def maintenance_task(this_task, credentials_id: int):
     raise RuntimeError('Нет активной задачи')
 
     try:
@@ -219,8 +224,12 @@ def maintenance_task(credentials_id: int):
     return 'Задача успешно завершена'
 
 
-@shared_task
-def reload_enterprises(credentials_id: int, business_entity_id: int):
+@shared_task(bind=True)
+def reload_enterprises_task(this_task, credentials_id: int, business_entity_id: int):
+    return reload_enterprises(this_task, credentials_id, business_entity_id)
+
+
+def reload_enterprises(this_task, credentials_id: int, business_entity_id: int):
     try:
         business_entity = BusinessEntity.objects.get(id=business_entity_id)
     except ObjectDoesNotExist:
@@ -234,36 +243,61 @@ def reload_enterprises(credentials_id: int, business_entity_id: int):
     list_count = 1000
     list_offset = 0
 
+    response_xml_pages = []
+
+    logger.debug('Загружаем информацию о предприятиях хозяйствующего субъекта...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': 'Загружаем информацию о предприятиях хозяйствующего субъекта...'})
+
+    while True: # repeat if has pages
+
+        logger.debug(f'Запрос c list_offset={list_offset}')
+
+        soap_request = ActivityLocationListRequest(business_entity.guid, list_count, list_offset)
+
+        response = send_soap_request(soap_request, credentials)
+
+        if response.status_code != 200:
+            raise RuntimeError(f'Ошибка запроса ({response.status_code}): {response.reason}')
+        
+        result_xml = ET.fromstring(response.text)
+
+        response_xml_pages.append(result_xml.find('./soapenv:Body/ws:getActivityLocationListResponse/dt:activityLocationList', NAMESPACES))
+
+        total = int(response_xml_pages[-1].get('total'))
+
+        if not list_offset:
+            logger.debug(f'Всего предприятий: {total}')
+        
+        if total > list_offset + list_count:
+            list_offset += list_count
+        else:
+            break
+
+    logger.debug('Обновляем информацию о предприятиях хозяйствующего субъекта...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': 'Обновляем информацию о предприятиях хозяйствующего субъекта...'})
+
     with transaction.atomic():
 
         business_entity.enterprise_set.update(is_active=False)
 
-        while True: # repeat if has pages
-
-            soap_request = ActivityLocationListRequest(business_entity.guid, list_count, list_offset)
-
-            response = send_soap_request(soap_request, credentials)
-
-            if response.status_code != 200:
-                raise RuntimeError(f'Ошибка запроса ({response.status_code}): {response.reason}')
-            
-            result_xml = ET.fromstring(response.text)
-
-            response_xml = result_xml.find('./soapenv:Body/ws:getActivityLocationListResponse/dt:activityLocationList', NAMESPACES)
+        for response_xml in response_xml_pages:
 
             for enterprise_xml in response_xml.findall('dt:location/dt:enterprise', NAMESPACES):
                 try:
-                    enterprise = Enterprise.objects.get(guid=enterprise_xml.find('bs:guid', NAMESPACES).text)
+                    # enterprise = Enterprise.objects.get(guid=enterprise_xml.find('bs:guid', NAMESPACES).text)
+                    enterprise = Enterprise.objects.get(guid=get_xml_text(enterprise_xml, 'bs:guid'))
                 except:
                     enterprise = Enterprise()
                 
                 enterprise.business_entity = business_entity
-                enterprise.guid = enterprise_xml.find('bs:guid', NAMESPACES).text
-                enterprise.uuid = enterprise_xml.find('bs:uuid', NAMESPACES).text
-                enterprise.type = int(enterprise_xml.find('dt:type', NAMESPACES).text)
-                enterprise.name = enterprise_xml.find('dt:name', NAMESPACES).text
-                enterprise.address = enterprise_xml.find('dt:address/dt:addressView', NAMESPACES).text
-                enterprise.is_active = enterprise_xml.find('bs:active', NAMESPACES).text == 'true'
+                enterprise.guid = get_xml_text(enterprise_xml, 'bs:guid')
+                enterprise.uuid = get_xml_text(enterprise_xml, 'bs:uuid')
+                enterprise.type = int(get_xml_text(enterprise_xml, 'dt:type'))
+                enterprise.name = get_xml_text(enterprise_xml, 'dt:name')
+                enterprise.address = get_xml_text(enterprise_xml, 'dt:address/dt:addressView')
+                enterprise.is_active = get_xml_text(enterprise_xml, 'bs:active') == 'true'
 
                 enterprise_numbers = []
 
@@ -274,14 +308,7 @@ def reload_enterprises(credentials_id: int, business_entity_id: int):
 
                 enterprise.save()
 
-            total = int(response_xml.get('total'))
-            
-            if total > list_offset + list_count:
-                list_offset += list_count
-            else:
-                break
-
-        # /while
+        # /for pages
     # /transaction.atomic
     
     return 'Предприятия хозяйствующего субъекта успешно обновлены.'
@@ -312,8 +339,6 @@ def get_or_load_product_by_guid(credentials: VetisCredentials, product_guid: str
     if response is None:
         raise BadRequest()
     
-    sleep(0.5)
-    
     if response.status_code != 200:
         raise BadRequest()
     
@@ -327,13 +352,11 @@ def get_or_load_product_by_guid(credentials: VetisCredentials, product_guid: str
     # code
     # product_type
 
-    product.guid = product_xml.find('bs:guid', NAMESPACES).text
-    product.uuid = product_xml.find('bs:uuid', NAMESPACES).text
-    product.name = product_xml.find('dt:name', NAMESPACES).text
-    code_xml = product_xml.find('dt:code', NAMESPACES)
-    if code_xml is not None:
-        product.code = code_xml.text
-    product.product_type = int(product_xml.find('dt:productType', NAMESPACES).text)
+    product.guid = get_xml_text(product_xml, 'bs:guid')
+    product.uuid = get_xml_text(product_xml, 'bs:uuid')
+    product.name = get_xml_text(product_xml, 'dt:name')
+    product.code = get_xml_text(product_xml, 'dt:code', default='')
+    product.product_type = int(get_xml_text(product_xml, 'dt:productType'))
 
     product.save()
 
@@ -365,8 +388,6 @@ def get_or_load_subproduct_by_guid(credentials: VetisCredentials, subproduct_gui
     if response is None:
         raise BadRequest()
     
-    sleep(0.5)
-    
     if response.status_code != 200:
         raise BadRequest()
     
@@ -381,13 +402,11 @@ def get_or_load_subproduct_by_guid(credentials: VetisCredentials, subproduct_gui
     # product_guid
     # product
 
-    subproduct.guid = subproduct_xml.find('bs:guid', NAMESPACES).text
-    subproduct.uuid = subproduct_xml.find('bs:uuid', NAMESPACES).text
-    subproduct.name = subproduct_xml.find('dt:name', NAMESPACES).text
-    code_xml = subproduct_xml.find('dt:code', NAMESPACES)
-    if code_xml is not None:
-        subproduct.code = code_xml.text
-    subproduct.product_guid = subproduct_xml.find('dt:productGuid', NAMESPACES).text
+    subproduct.guid = get_xml_text(subproduct_xml, 'bs:guid')
+    subproduct.uuid = get_xml_text(subproduct_xml, 'bs:uuid')
+    subproduct.name = get_xml_text(subproduct_xml, 'dt:name')
+    subproduct.code = get_xml_text(subproduct_xml, 'dt:code', default='')
+    subproduct.product_guid = get_xml_text(subproduct_xml, 'dt:productGuid')
 
     product = get_or_load_product_by_guid(credentials=credentials, product_guid=subproduct.product_guid)
 
@@ -396,6 +415,52 @@ def get_or_load_subproduct_by_guid(credentials: VetisCredentials, subproduct_gui
     subproduct.save()
 
     return subproduct
+
+
+def fill_product_item_from_xml(product_item: ProductItem, product_item_xml: ET.Element, credentials: VetisCredentials):
+
+    # guid
+    # uuid
+    # is_active
+    # name
+    # gtin
+    # product_type
+    # product_guid
+    # product
+    # subproduct_guid
+    # subproduct
+    # is_gost
+    # gost
+    # producer_guid
+    # producer
+
+    product_item.guid = get_xml_text(product_item_xml, 'bs:guid')
+    product_item.uuid = get_xml_text(product_item_xml, 'bs:uuid')
+    product_item.is_active = get_xml_text(product_item_xml, 'bs:active') == 'true'
+    product_item.name = get_xml_text(product_item_xml, 'dt:name', default='')
+    product_item.gtin = get_xml_text(product_item_xml, 'dt:globalID', default='')
+
+    product_item.product_type = int(get_xml_text(product_item_xml, 'dt:productType'))
+    product_item.product_guid = get_xml_text(product_item_xml, 'dt:product/bs:guid')
+    product_item.product = get_or_load_product_by_guid(credentials=credentials, product_guid=product_item.product_guid)
+    product_item.subproduct_guid = get_xml_text(product_item_xml, 'dt:subProduct/bs:guid')
+    product_item.subproduct = get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=product_item.subproduct_guid)
+
+    if not product_item.name:
+        product_item.name = product_item.subproduct.name
+
+    product_item.is_gost = get_xml_text(product_item_xml, 'dt:correspondsToGost') == 'true'
+    if product_item.is_gost:
+        product_item.gost = get_xml_text(product_item_xml, 'dt:gost')
+
+    producer_guid_xml = product_item_xml.find('dt:producer/bs:guid', NAMESPACES)
+    if producer_guid_xml is not None:
+        product_item.producer_guid = producer_guid_xml.text
+        producer = BusinessEntity.objects.filter(guid=product_item.producer_guid).first()
+        if producer is not None:
+            product_item.producer = producer
+
+    product_item.save()
 
 
 def get_or_load_product_item_by_guid(credentials: VetisCredentials, product_item_guid: str, update: bool = False) -> ProductItem:
@@ -430,48 +495,7 @@ def get_or_load_product_item_by_guid(credentials: VetisCredentials, product_item
 
     product_item_xml = result_xml.find('./soapenv:Body/ws:getProductItemByGuidResponse/dt:productItem', NAMESPACES)
 
-    # guid
-    # uuid
-    # is_active
-    # name
-    # gtin
-    # product_type
-    # product_guid
-    # product
-    # subproduct_guid
-    # subproduct
-    # is_gost
-    # gost
-    # producer_guid
-    # producer
-
-    product_item.guid = product_item_xml.find('bs:guid', NAMESPACES).text
-    product_item.uuid = product_item_xml.find('bs:uuid', NAMESPACES).text
-    product_item.is_active = product_item_xml.find('bs:active', NAMESPACES).text == 'true'
-    name_xml = product_item_xml.find('dt:name', NAMESPACES)
-    if name_xml is not None:
-        product_item.name = name_xml.text
-    globalID_xml = product_item_xml.find('dt:globalID', NAMESPACES)
-    if globalID_xml is not None:
-        product_item.gtin = globalID_xml.text
-    product_item.product_type = int(product_item_xml.find('dt:productType', NAMESPACES).text)
-    product_item.product_guid = product_item_xml.find('dt:product/bs:guid', NAMESPACES).text
-    product_item.product = get_or_load_product_by_guid(credentials=credentials, product_guid=product_item.product_guid)
-    product_item.subproduct_guid = product_item_xml.find('dt:subProduct/bs:guid', NAMESPACES).text
-    product_item.subproduct = get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=product_item.subproduct_guid)
-    if name_xml is None:
-        product_item.name = product_item.subproduct.name
-    product_item.is_gost = product_item_xml.find('dt:correspondsToGost', NAMESPACES).text == 'true'
-    if product_item.is_gost:
-        product_item.gost = product_item_xml.find('dt:gost', NAMESPACES).text
-    producer_guid_xml = product_item_xml.find('dt:producer/bs:guid', NAMESPACES)
-    if producer_guid_xml is not None:
-        product_item.producer_guid = producer_guid_xml.text
-    producer = BusinessEntity.objects.filter(guid=product_item.producer_guid).first()
-    if producer is not None:
-        product_item.producer = producer
-
-    product_item.save()
+    fill_product_item_from_xml(product_item, product_item_xml, credentials)
 
     return product_item
 
@@ -501,8 +525,6 @@ def get_or_load_unit_by_guid(credentials: VetisCredentials, unit_guid: str, upda
     if response is None:
         raise BadRequest()
     
-    sleep(0.5)
-    
     if response.status_code != 200:
         raise BadRequest()
     
@@ -513,8 +535,8 @@ def get_or_load_unit_by_guid(credentials: VetisCredentials, unit_guid: str, upda
     # guid
     # name
 
-    unit.guid = unit_xml.find('bs:guid', NAMESPACES).text
-    unit.name = unit_xml.find('dt:name', NAMESPACES).text
+    unit.guid = get_xml_text(unit_xml, 'bs:guid')
+    unit.name = get_xml_text(unit_xml, 'dt:name')
 
     unit.save()
 
@@ -543,22 +565,31 @@ def get_or_load_business_entity_info_by_guid(credentials: VetisCredentials, busi
     business_entity_xml = result_xml.find('./soapenv:Body/ws:getBusinessEntityByGuidResponse/dt:businessEntity', NAMESPACES)
 
     be_info.guid = business_entity_guid
-    be_info.uuid = business_entity_xml.find('bs:uuid', NAMESPACES).text
+    be_info.uuid = get_xml_text(business_entity_xml, 'bs:uuid')
 
-    name_xml = business_entity_xml.find('dt:name', NAMESPACES)
-    if name_xml is None:
-        name_xml = business_entity_xml.find('dt:fullName', NAMESPACES)
-    if name_xml is None:
-        name_xml = business_entity_xml.find('dt:fio', NAMESPACES)
+    # name_xml = business_entity_xml.find('dt:name', NAMESPACES)
+    # if name_xml is None:
+    #     name_xml = business_entity_xml.find('dt:fullName', NAMESPACES)
+    # if name_xml is None:
+    #     name_xml = business_entity_xml.find('dt:fio', NAMESPACES)
 
-    if name_xml is None:
-        be_info.name = str(business_entity_guid)
-    else:
-        be_info.name = name_xml.text
+    # if name_xml is None:
+    #     be_info.name = str(business_entity_guid)
+    # else:
+    #     be_info.name = name_xml.text
 
-    inn_xml = business_entity_xml.find('dt:inn', NAMESPACES)
-    if inn_xml is not None:
-        be_info.inn = inn_xml.text
+    be_info.name = (
+        get_xml_text(business_entity_xml, 'dt:name', default='')
+        or get_xml_text(business_entity_xml, 'dt:fullName', default='')
+        or get_xml_text(business_entity_xml, 'dt:fio', default='')
+        or str(business_entity_guid)
+    )
+
+    # inn_xml = business_entity_xml.find('dt:inn', NAMESPACES)
+    # if inn_xml is not None:
+    #     be_info.inn = inn_xml.text
+
+    be_info.inn = get_xml_text(business_entity_xml, 'dt:inn', default='')
     
     be_info.save()
 
@@ -587,12 +618,13 @@ def get_or_load_enterprise_info_by_guid(credentials: VetisCredentials, enterpris
     enterprise_xml = result_xml.find('./soapenv:Body/ws:getEnterpriseByGuidResponse/dt:enterprise', NAMESPACES)
 
     ent_info.guid = enterprise_guid
-    ent_info.uuid = enterprise_xml.find('bs:uuid', NAMESPACES).text
-    name_xml = enterprise_xml.find('dt:name', NAMESPACES)
-    ent_info.name = name_xml.text
-    address_xml = enterprise_xml.find('dt:address/dt:addressView', NAMESPACES)
-    if address_xml is not None:
-        ent_info.address = address_xml.text
+    ent_info.uuid = get_xml_text(enterprise_xml, 'bs:uuid')
+    ent_info.name = get_xml_text(enterprise_xml, 'dt:name')
+    ent_info.address = get_xml_text(enterprise_xml, 'dt:address/dt:addressView', default='')
+
+    # address_xml = enterprise_xml.find('dt:address/dt:addressView', NAMESPACES)
+    # if address_xml is not None:
+    #     ent_info.address = address_xml.text
     
     # owner_guid = enterprise_xml.find('dt:owner/bs:guid', NAMESPACES).text  # В ОТВЕТЕ НЕТ ИНФЫ О ХС!!!
     # ent_info.business_entity = get_or_load_business_entity_info_by_guid(credentials, owner_guid)
@@ -637,8 +669,12 @@ def get_or_load_vet_document_by_uuid(credentials: VetisCredentials, enterprise: 
     return vet_document
 
 
-@shared_task
-def reload_product_subproduct(credentials_id: int):
+@shared_task(bind=True)
+def reload_product_subproduct_task(this_task, credentials_id: int):
+    return reload_product_subproduct(this_task, credentials_id)
+
+
+def reload_product_subproduct(this_task, credentials_id: int):
     """Update existing product and subproduct records form Vetis"""
 
     try:
@@ -655,8 +691,12 @@ def reload_product_subproduct(credentials_id: int):
     return 'Списки продукция и вид продукции обновлены.'
 
 
-@shared_task
-def reload_product_items(credentials_id: int, business_entity_id: int):
+@shared_task(bind=True)
+def reload_product_items_task(this_task, credentials_id: int, business_entity_id: int):
+    return reload_product_items(this_task, credentials_id, business_entity_id)
+
+
+def reload_product_items(this_task, credentials_id: int, business_entity_id: int):
     try:
         business_entity = BusinessEntity.objects.get(id=business_entity_id)
     except ObjectDoesNotExist:
@@ -670,24 +710,46 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
     list_count = 1000
     list_offset = 0
 
+    response_xml_pages = []
+
+    logger.debug('Загружаем наименования продукции хозяйствующего субъекта...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': 'Загружаем наименования продукции хозяйствующего субъекта...'})
+
+    while True: # repeat if has pages
+
+        logger.debug(f'Запрос c list_offset={list_offset}')
+
+        soap_request = ProductItemListRequest(business_entity.guid, list_count, list_offset)
+
+        response = send_soap_request(soap_request, credentials)
+
+        if response.status_code != 200:
+            raise RuntimeError(f'Ошибка запроса ({response.status_code}): {response.reason}')
+        
+        result_xml = ET.fromstring(response.text)
+
+        response_xml_pages.append(result_xml.find('./soapenv:Body/ws:getProductItemListResponse/dt:productItemList', NAMESPACES))
+
+        total = int(response_xml_pages[-1].get('total'))
+
+        if not list_offset:
+            logger.debug(f'Всего наименований: {total}')
+        
+        if total > list_offset + list_count:
+            list_offset += list_count
+        else:
+            break
+
+    logger.debug('Заполняем наименования продукции хозяйствующего субъекта...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': 'Заполняем наименования продукции хозяйствующего субъекта...'})
+
     with transaction.atomic():
 
         ProductItem.objects.filter(producer_guid=business_entity.guid).update(is_active=False)
 
-        while True: # repeat if has pages
-
-            logger.debug(f'reload_product_items: list_offset={list_offset}')
-
-            soap_request = ProductItemListRequest(business_entity.guid, list_count, list_offset)
-
-            response = send_soap_request(soap_request, credentials)
-
-            if response.status_code != 200:
-                raise RuntimeError(f'Ошибка запроса ({response.status_code}): {response.reason}')
-            
-            result_xml = ET.fromstring(response.text)
-
-            response_xml = result_xml.find('./soapenv:Body/ws:getProductItemListResponse/dt:productItemList', NAMESPACES)
+        for response_xml in response_xml_pages:
 
             for product_item_xml in response_xml.findall('dt:productItem', NAMESPACES):
                 try:
@@ -695,55 +757,9 @@ def reload_product_items(credentials_id: int, business_entity_id: int):
                 except:
                     product_item = ProductItem()
 
-                # guid
-                # uuid
-                # is_active
-                # name
-                # gtin
-                # product_type
-                # product_guid
-                # product
-                # subproduct_guid
-                # subproduct
-                # is_gost
-                # gost
-                # producer_guid
-                # producer
+                fill_product_item_from_xml(product_item, product_item_xml, credentials)
 
-                product_item.guid = product_item_xml.find('bs:guid', NAMESPACES).text
-                product_item.uuid = product_item_xml.find('bs:uuid', NAMESPACES).text
-                product_item.is_active = product_item_xml.find('bs:active', NAMESPACES).text == 'true'
-                name_xml = product_item_xml.find('dt:name', NAMESPACES)
-                if name_xml is not None:
-                    product_item.name = name_xml.text
-                globalID_xml = product_item_xml.find('dt:globalID', NAMESPACES)
-                if globalID_xml is not None:
-                    product_item.gtin = globalID_xml.text
-                product_item.product_type = int(product_item_xml.find('dt:productType', NAMESPACES).text)
-                product_item.product_guid = product_item_xml.find('dt:product/bs:guid', NAMESPACES).text
-                product_item.product = get_or_load_product_by_guid(credentials=credentials, product_guid=product_item.product_guid)
-                product_item.subproduct_guid = product_item_xml.find('dt:subProduct/bs:guid', NAMESPACES).text
-                product_item.subproduct = get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=product_item.subproduct_guid)
-                if name_xml is None:
-                    product_item.name = product_item.subproduct.name
-                product_item.is_gost = product_item_xml.find('dt:correspondsToGost', NAMESPACES).text == 'true'
-                if product_item.is_gost:
-                    product_item.gost = product_item_xml.find('dt:gost', NAMESPACES).text
-                producer_guid_xml = product_item_xml.find('dt:producer/bs:guid', NAMESPACES)
-                if producer_guid_xml is not None:
-                    product_item.producer_guid = producer_guid_xml.text
-                product_item.producer = business_entity
-
-                product_item.save()
-
-            total = int(response_xml.get('total'))
-            
-            if total > list_offset + list_count:
-                list_offset += list_count
-                sleep(1.0)
-            else:
-                break
-        # /while
+        # /for pages
     # /transaction.atomic
 
     # fill product ids
@@ -896,8 +912,12 @@ def fill_vet_document_from_xml(vet_document: VetDocument, vet_document_xml: ET.E
     vet_document.save()
 
 
-@shared_task
-def update_vet_documents(credentials_id: int, initiator_login: str, enterprise_id: int):
+@shared_task(bind=True)
+def update_vet_documents_task(this_task, credentials_id: int, initiator_login: str, enterprise_id: int):
+    return update_vet_documents(this_task, credentials_id, initiator_login, enterprise_id)
+
+
+def update_vet_documents(this_task, credentials_id: int, initiator_login: str, enterprise_id: int):
     try:
         enterprise = Enterprise.objects.get(id=enterprise_id)
     except ObjectDoesNotExist:
@@ -918,29 +938,51 @@ def update_vet_documents(credentials_id: int, initiator_login: str, enterprise_i
     list_count = 1000
     list_offset = 0
 
+    response_xml_pages = []
+
+    logger.debug('Загружаем список ветеринарных документов...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': 'Загружаем список ветеринарных документов...'})
+
+    while True: # repeat if has pages
+
+        logger.debug(f'Запрос c list_offset={list_offset}')
+
+        soap_request = GetVetDocumentChangesListRequest(
+            enterprise_guid=enterprise.guid,
+            begin_date=begin_date,
+            end_date=end_date,
+            api_key=credentials.api_key,
+            service_id=credentials.service_id,
+            issuer_id=credentials.issuer_id,
+            initiator_login=initiator_login,
+            list_count=list_count,
+            list_offset=list_offset
+        )
+
+        response = send_2step_soap_request(soap_request, credentials)
+
+        result_xml = ET.fromstring(response.text)
+
+        response_xml_pages.append(result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getVetDocumentChangesListResponse/vd:vetDocumentList', NAMESPACES))
+
+        total = int(response_xml_pages[-1].get('total'))
+
+        if not list_offset:
+            logger.debug(f'Всего документов: {total}')
+
+        if total > list_offset + list_count:
+            list_offset += list_count
+        else:
+            break
+
+    logger.debug('Обновляем список ветеринарных документов...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': 'Обновляем список ветеринарных документов...'})
+
     with transaction.atomic():
 
-        while True: # repeat if has pages
-
-            logger.debug(f'Обновляем список ветеринарных документов: list_offset={list_offset}')
-
-            soap_request = GetVetDocumentChangesListRequest(
-                enterprise_guid=enterprise.guid,
-                begin_date=begin_date,
-                end_date=end_date,
-                api_key=credentials.api_key,
-                service_id=credentials.service_id,
-                issuer_id=credentials.issuer_id,
-                initiator_login=initiator_login,
-                list_count=list_count,
-                list_offset=list_offset
-            )
-
-            response = send_2step_soap_request(soap_request, credentials)
-
-            result_xml = ET.fromstring(response.text)
-
-            response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getVetDocumentChangesListResponse/vd:vetDocumentList', NAMESPACES)
+        for response_xml in response_xml_pages:
 
             for vet_document_xml in response_xml.findall('vd:vetDocument', NAMESPACES):
                 try:
@@ -954,16 +996,7 @@ def update_vet_documents(credentials_id: int, initiator_login: str, enterprise_i
                     credentials=credentials
                     )
                 
-            # / for main
-
-            total = int(response_xml.get('total'))
-
-            if total > list_offset + list_count:
-                list_offset += list_count
-                sleep(1.0)
-            else:
-                break
-        # /while
+        # /for pages
 
         enterprise.vet_documents_last_updated = end_date
         enterprise.save()
@@ -981,8 +1014,8 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
     # uuid
 
     stock_entry.enterprise = enterprise
-    stock_entry.guid = stock_entry_xml.find('bs:guid', NAMESPACES).text
-    stock_entry.uuid = stock_entry_xml.find('bs:uuid', NAMESPACES).text
+    stock_entry.guid = get_xml_text(stock_entry_xml, 'bs:guid')
+    stock_entry.uuid = get_xml_text(stock_entry_xml, 'bs:uuid')
     stock_entry.main, main_created = StockEntryMain.objects.get_or_create(guid=stock_entry.guid)
 
     # is_active
@@ -994,18 +1027,18 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
     # next_uuid
     # entry_number
 
-    stock_entry.is_active = stock_entry_xml.find('bs:active', NAMESPACES).text == 'true'
-    stock_entry.is_last = stock_entry_xml.find('bs:last', NAMESPACES).text == 'true'
-    stock_entry.status = int(stock_entry_xml.find('bs:status', NAMESPACES).text)
-    stock_entry.date_created = datetime.fromisoformat(stock_entry_xml.find('bs:createDate', NAMESPACES).text)
-    stock_entry.date_updated = datetime.fromisoformat(stock_entry_xml.find('bs:updateDate', NAMESPACES).text)
+    stock_entry.is_active = get_xml_text(stock_entry_xml, 'bs:active') == 'true'
+    stock_entry.is_last = get_xml_text(stock_entry_xml, 'bs:last') == 'true'
+    stock_entry.status = int(get_xml_text(stock_entry_xml, 'bs:status'))
+    stock_entry.date_created = datetime.fromisoformat(get_xml_text(stock_entry_xml, 'bs:createDate'))
+    stock_entry.date_updated = datetime.fromisoformat(get_xml_text(stock_entry_xml, 'bs:updateDate'))
     previous_uuid_xml = stock_entry_xml.find('bs:previous', NAMESPACES)
     if previous_uuid_xml is not None:
         stock_entry.previous_uuid = previous_uuid_xml.text
     next_uuid_xml = stock_entry_xml.find('bs:next', NAMESPACES)
     if next_uuid_xml is not None:
         stock_entry.next_uuid = next_uuid_xml.text
-    stock_entry.entry_number = stock_entry_xml.find('vd:entryNumber', NAMESPACES).text
+    stock_entry.entry_number = get_xml_text(stock_entry_xml, 'vd:entryNumber')
 
     batch_xml = stock_entry_xml.find('vd:batch', NAMESPACES)
     
@@ -1015,17 +1048,17 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
     # subproduct_guid
     # subproduct
 
-    stock_entry.product_type = int(batch_xml.find('vd:productType', NAMESPACES).text)
-    stock_entry.product_guid = batch_xml.find('vd:product/bs:guid', NAMESPACES).text
+    stock_entry.product_type = int(get_xml_text(batch_xml, 'vd:productType'))
+    stock_entry.product_guid = get_xml_text(batch_xml, 'vd:product/bs:guid')
     stock_entry.product = get_or_load_product_by_guid(credentials=credentials, product_guid=stock_entry.product_guid)
-    stock_entry.subproduct_guid = batch_xml.find('vd:subProduct/bs:guid', NAMESPACES).text
+    stock_entry.subproduct_guid = get_xml_text(batch_xml, 'vd:subProduct/bs:guid')
     stock_entry.subproduct = get_or_load_subproduct_by_guid(credentials=credentials, subproduct_guid=stock_entry.subproduct_guid)
     
     # product_item_guid
     # product_item_name
     # product_item
 
-    stock_entry.product_item_name = batch_xml.find('vd:productItem/dt:name', NAMESPACES).text
+    stock_entry.product_item_name = get_xml_text(batch_xml, 'vd:productItem/dt:name')
     product_item_guid_xml = batch_xml.find('vd:productItem/bs:guid', NAMESPACES)
     if product_item_guid_xml is not None:
         stock_entry.product_item_guid = product_item_guid_xml.text
@@ -1039,7 +1072,7 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
     else:
         stock_entry.volume = Decimal(batch_xml.find('vd:volume', NAMESPACES).text)
 
-    stock_entry.unit = get_or_load_unit_by_guid(credentials, batch_xml.find('vd:unit/bs:guid', NAMESPACES).text)
+    stock_entry.unit = get_or_load_unit_by_guid(credentials, get_xml_text(batch_xml, 'vd:unit/bs:guid'))
     
     # date_produced_1
     # date_produced_2
@@ -1062,18 +1095,13 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
 
     # is_perishable
 
-    stock_entry.is_perishable = batch_xml.find('vd:perishable', NAMESPACES).text == 'true'
+    stock_entry.is_perishable = get_xml_text(batch_xml, 'vd:perishable') == 'true'
 
     # origin_country
     # producer_name
     
-    origin_country_xml = batch_xml.find('vd:origin/vd:country/dt:name', NAMESPACES)
-    if origin_country_xml is not None:
-        stock_entry.origin_country = origin_country_xml.text
-
-    producer_name_xml = batch_xml.find('vd:origin/vd:producer/dt:enterprise/dt:name', NAMESPACES)
-    if producer_name_xml is not None:
-        stock_entry.producer_name = producer_name_xml.text
+    stock_entry.origin_country = get_xml_text(batch_xml, 'vd:origin/vd:country/dt:name', default='')
+    stock_entry.producer_name = get_xml_text(batch_xml, 'vd:origin/vd:producer/dt:enterprise/dt:name', default='')
 
     producer_guid_xml = batch_xml.find('vd:origin/vd:producer/dt:enterprise/bs:guid', NAMESPACES)
     if producer_guid_xml is not None:
@@ -1094,11 +1122,11 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
 
         package = Package()
         package.stock_entry = stock_entry
-        package.level = int(package_xml.find('dt:level', NAMESPACES).text)
-        packing_type_guid = package_xml.find('dt:packingType/bs:guid', NAMESPACES).text
-        packing_type_uuid = package_xml.find('dt:packingType/bs:uuid', NAMESPACES).text
-        packing_type_name = package_xml.find('dt:packingType/dt:name', NAMESPACES).text
-        packing_type_glodal_id = package_xml.find('dt:packingType/dt:globalID', NAMESPACES).text
+        package.level = int(get_xml_text(package_xml, 'dt:level'))
+        packing_type_guid = get_xml_text(package_xml, 'dt:packingType/bs:guid')
+        packing_type_uuid = get_xml_text(package_xml, 'dt:packingType/bs:uuid')
+        packing_type_name = get_xml_text(package_xml, 'dt:packingType/dt:name')
+        packing_type_glodal_id = get_xml_text(package_xml, 'dt:packingType/dt:globalID')
         package.packing_type = PackingType.get_or_create(
             guid=packing_type_guid,
             uuid=packing_type_uuid,
@@ -1130,8 +1158,12 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
     # / for package
 
 
-@shared_task
-def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_id: int):
+@shared_task(bind=True)
+def update_stock_entries_task(this_task, credentials_id: int, initiator_login: str, enterprise_id: int):
+    return update_stock_entries(this_task, credentials_id, initiator_login, enterprise_id)
+
+
+def update_stock_entries(this_task, credentials_id: int, initiator_login: str, enterprise_id: int):
     """Загружаем изменения в записях журнала, загружаем изменения в списке ветдокументов, обновляем головные записи."""
 
     try:
@@ -1157,43 +1189,66 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
     list_count = 1000
     list_offset = 0
 
+    response_xml_pages = []
+
+    logger.debug(f'Загружаем записи складского журнала (режим {update_mode})...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': f'Загружаем записи складского журнала (режим {update_mode})...'})
+
+    while True: # repeat if has pages
+
+        logger.debug(f'Запрос c list_offset={list_offset}')
+
+        if update_mode == 'INITIAL':
+            soap_request = GetStockEntryListRequest(
+                enterprise_guid=enterprise.guid,
+                api_key=credentials.api_key,
+                service_id=credentials.service_id,
+                issuer_id=credentials.issuer_id,
+                initiator_login=initiator_login,
+                list_count=list_count,
+                list_offset=list_offset
+            )
+        else:
+            soap_request = GetStockEntryChangesListRequest(
+                enterprise_guid=enterprise.guid,
+                begin_date=begin_date,
+                end_date=end_date,
+                api_key=credentials.api_key,
+                service_id=credentials.service_id,
+                issuer_id=credentials.issuer_id,
+                initiator_login=initiator_login,
+                list_count=list_count,
+                list_offset=list_offset
+            )
+
+        response = send_2step_soap_request(soap_request, credentials)
+
+        result_xml = ET.fromstring(response.text)
+
+        if update_mode == 'INITIAL':
+            response_xml_pages.append(result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryListResponse/vd:stockEntryList', NAMESPACES))
+        else:
+            response_xml_pages.append(result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryChangesListResponse/vd:stockEntryList', NAMESPACES))
+
+        total = int(response_xml_pages[-1].get('total'))
+
+        if not list_offset:
+            logger.debug(f'Всего записей: {total}')
+
+        if total > list_offset + list_count:
+            list_offset += list_count
+        else:
+            break
+    # /while
+
+    logger.debug(f'Обновляем записи складского журнала (режим {update_mode})...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': f'Обновляем записи складского журнала (режим {update_mode})...'})
+
     with transaction.atomic():
 
-        while True: # repeat if has pages
-
-            logger.debug(f'Обновляем записи складского журнала: mode={update_mode}, list_offset={list_offset}')
-
-            if update_mode == 'INITIAL':
-                soap_request = GetStockEntryListRequest(
-                    enterprise_guid=enterprise.guid,
-                    api_key=credentials.api_key,
-                    service_id=credentials.service_id,
-                    issuer_id=credentials.issuer_id,
-                    initiator_login=initiator_login,
-                    list_count=list_count,
-                    list_offset=list_offset
-                )
-            else:
-                soap_request = GetStockEntryChangesListRequest(
-                    enterprise_guid=enterprise.guid,
-                    begin_date=begin_date,
-                    end_date=end_date,
-                    api_key=credentials.api_key,
-                    service_id=credentials.service_id,
-                    issuer_id=credentials.issuer_id,
-                    initiator_login=initiator_login,
-                    list_count=list_count,
-                    list_offset=list_offset
-                )
-
-            response = send_2step_soap_request(soap_request, credentials)
-
-            result_xml = ET.fromstring(response.text)
-
-            if update_mode == 'INITIAL':
-                response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryListResponse/vd:stockEntryList', NAMESPACES)
-            else:
-                response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryChangesListResponse/vd:stockEntryList', NAMESPACES)
+        for response_xml in response_xml_pages:
 
             for stock_entry_xml in response_xml.findall('vd:stockEntry', NAMESPACES):
                 try:
@@ -1207,32 +1262,33 @@ def update_stock_entries(credentials_id: int, initiator_login: str, enterprise_i
                     stock_entry_xml=stock_entry_xml,
                     credentials=credentials
                     )
-                
-            # / for main
 
-            total = int(response_xml.get('total'))
-
-            if total > list_offset + list_count:
-                list_offset += list_count
-                sleep(1.0)
-            else:
-                break
-        # /while
+        # /for pages
 
         enterprise.stock_entries_last_updated = end_date
         enterprise.save()
 
     # /transaction.atomic   
 
-    update_vet_documents(credentials_id, initiator_login, enterprise_id)
+    uvd_result = update_vet_documents(this_task, credentials_id, initiator_login, enterprise_id)
 
-    update_stock_entry_main_records(credentials_id, initiator_login, enterprise_id)
+    usemr_result = update_stock_entry_main_records(this_task, credentials_id, initiator_login, enterprise_id)
 
-    return f'Складские записи для предприятия успешно обновлены. Всего: {total}'
+    total_result = {
+        "info1": f'Складские записи для предприятия успешно обновлены. Всего: {total}',
+        "info2": usemr_result,
+        "info3": uvd_result,
+    }
+
+    return total_result
 
 
-@shared_task
-def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_entry_id: int):
+@shared_task(bind=True)
+def update_stock_entry_history_task(this_task, credentials_id: int, initiator_login: str, stock_entry_id: int):
+    return update_stock_entry_history(this_task, credentials_id, initiator_login, stock_entry_id)
+
+
+def update_stock_entry_history(this_task, credentials_id: int, initiator_login: str, stock_entry_id: int):
     try:
         stock_entry = StockEntry.objects.get(id=stock_entry_id)
     except ObjectDoesNotExist:
@@ -1255,26 +1311,48 @@ def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_
     list_count = 1000
     list_offset = 0
 
+    response_xml_pages = []
+
+    logger.debug('Загружаем историю записи журнала...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': f'Загружаем историю записи журнала {stock_entry.entry_number}...'})
+
+    while True: # repeat if has pages
+            
+        soap_request = GetStockEntryVersionListRequest(
+            enterprise_guid=enterprise.guid,
+            stock_entry_guid=stock_entry.guid,
+            api_key=credentials.api_key,
+            service_id=credentials.service_id,
+            issuer_id=credentials.issuer_id,
+            initiator_login=initiator_login,
+            list_count=list_count,
+            list_offset=list_offset
+        )
+
+        response = send_2step_soap_request(soap_request, credentials)
+
+        result_xml = ET.fromstring(response.text)
+
+        response_xml_pages.append(result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryVersionListResponse/vd:stockEntryList', NAMESPACES))
+
+        total = int(response_xml_pages[-1].get('total'))
+
+        if not list_offset:
+            logger.debug(f'Всего версий: {total}')
+        
+        if total > list_offset + list_count:
+            list_offset += list_count
+        else:
+            break
+    # /while
+
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': f'Обновляем историю записи журнала {stock_entry.entry_number}...'})
+
     with transaction.atomic():
 
-        while True: # repeat if has pages
-            
-            soap_request = GetStockEntryVersionListRequest(
-                enterprise_guid=enterprise.guid,
-                stock_entry_guid=stock_entry.guid,
-                api_key=credentials.api_key,
-                service_id=credentials.service_id,
-                issuer_id=credentials.issuer_id,
-                initiator_login=initiator_login,
-                list_count=list_count,
-                list_offset=list_offset
-            )
-
-            response = send_2step_soap_request(soap_request, credentials)
-
-            result_xml = ET.fromstring(response.text)
-
-            response_xml = result_xml.find('./soapenv:Body/apldef:receiveApplicationResultResponse/apl:application/apl:result/merc:getStockEntryVersionListResponse/vd:stockEntryList', NAMESPACES)
+        for response_xml in response_xml_pages:
 
             for stock_entry_version_xml in response_xml.findall('vd:stockEntry', NAMESPACES):
                 try:
@@ -1289,24 +1367,13 @@ def update_stock_entry_history(credentials_id: int, initiator_login: str, stock_
                     credentials=credentials
                     )
 
-            # /for main
-
-            total = int(response_xml.get('total'))
-
-            logger.debug(f'Всего версий журнала: {total}')
-            
-            if total > list_offset + list_count:
-                list_offset += list_count
-                sleep(1.0)
-            else:
-                break
-        # /while
+        # /for pages
     # /transaction.atomic   
 
     return f'История для записи журнала успешно обновлена. Всего: {total}'
 
 
-def update_stock_entry_main(stock_entry_main: StockEntryMain, credentials: VetisCredentials, initiator_login: str):
+def update_stock_entry_main(this_task, stock_entry_main: StockEntryMain, credentials: VetisCredentials, initiator_login: str):
     if stock_entry_main.is_populated:
         return False
     
@@ -1317,7 +1384,7 @@ def update_stock_entry_main(stock_entry_main: StockEntryMain, credentials: Vetis
 
     if first_stock_entry.previous_uuid is not None:
         logger.debug('Загружаем полную историю записи журнала')
-        update_stock_entry_history(credentials.id, initiator_login=initiator_login, stock_entry_id=first_stock_entry.id)
+        update_stock_entry_history(this_task, credentials.id, initiator_login=initiator_login, stock_entry_id=first_stock_entry.id)
         first_stock_entry = StockEntry.objects.filter(main=stock_entry_main).order_by('date_created').first()
         if first_stock_entry is None:
             raise RuntimeError(f'Не удалось загрузить полную историю для записи с id={first_stock_entry.id}')
@@ -1362,8 +1429,12 @@ def update_stock_entry_main(stock_entry_main: StockEntryMain, credentials: Vetis
     return True
 
 
-@shared_task
-def update_stock_entry_main_records(credentials_id: int, initiator_login: str, enterprise_id: int):
+@shared_task(bind=True)
+def update_stock_entry_main_records_task(this_task, credentials_id: int, initiator_login: str, enterprise_id: int):
+    return update_stock_entry_main_records(this_task, credentials_id, initiator_login, enterprise_id)
+
+
+def update_stock_entry_main_records(this_task, credentials_id: int, initiator_login: str, enterprise_id: int):
     try:
         enterprise = Enterprise.objects.get(id=enterprise_id)
     except ObjectDoesNotExist:
@@ -1376,27 +1447,20 @@ def update_stock_entry_main_records(credentials_id: int, initiator_login: str, e
     
     if enterprise.business_entity.credentials != credentials:
         raise RuntimeError('Параметры подключения не соответствуют указанному предприятию')
-    
-
-    # # VET DOCUMENT FIX
-    # ses = StockEntry.objects.filter(previous_uuid__isnull=True, status=102, main__is_populated=False)
-    # ses_count = ses.count()
-    # ses_current = 0
-    # for se in ses:
-    #     ses_current += 1
-    #     logger.info(f'Updating stock entry {ses_current} of {ses_count}')
-    #     update_stock_entry_history(credentials_id, initiator_login, se.id)
-
 
     stock_entries = StockEntry.objects.filter(is_last=True, enterprise=enterprise).select_related('main').exclude(main__is_populated=True)
     total = stock_entries.count()
     processed = 0
     updated = 0
 
+    logger.debug('Обновляем головные записи журнала...')
+    if this_task:
+        this_task.update_state(state='PROGRESS', meta={'info': f'Обновляем головные записи журнала ({total})...'})
+
     for stock_entry in stock_entries:
         processed += 1
-        logger.debug(f'Обновление головной записи журнала: {processed} из {total}')
         if update_stock_entry_main(
+            this_task=this_task,
             stock_entry_main=stock_entry.main,
             credentials=credentials,
             initiator_login=initiator_login
