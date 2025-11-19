@@ -414,6 +414,10 @@ class VetDocument(models.Model):
     def date_expiry_display(self):
         return self.date_expiry_1 + ( f' - {self.date_expiry_2}' if self.date_expiry_2 else '')
     
+    @property
+    def status_change_list(self):
+        return self.status_change.split('\n')
+    
     def __str__(self):
         return f'{self.uuid} {self.product_item_name} - {self.volume}'
     
@@ -454,7 +458,7 @@ class StockEntryMain(models.Model):
     '''Головная запись складского журнала с доп. информацией'''
     guid = models.UUIDField(unique=True, db_index=True)
     is_populated = models.BooleanField(default=False, verbose_name='данные заполнены')
-    initial_status = models.IntegerField(null=True, blank=True, choices=STOCK_ENTRY_STATUS_CHOICES, verbose_name='статус версии')
+    initial_status = models.IntegerField(null=True, blank=True, choices=STOCK_ENTRY_STATUS_CHOICES, verbose_name='статус')
     date_created = models.DateTimeField(null=True, blank=True, verbose_name='дата создания')
     initial_volume = models.DecimalField(decimal_places=6, max_digits=15, null=True, blank=True, verbose_name='объем')
     source_be_guid = models.UUIDField(null=True)

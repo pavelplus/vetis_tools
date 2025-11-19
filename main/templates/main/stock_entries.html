@@ -11,23 +11,25 @@
       <br />
       <i class="bi bi-calendar-check"></i> Последнее событие: {{ entries_last_updated|default:"---"  }}
     </small></div>
-    <form method="POST" action="{% url 'main:vetis_task' %}">
-      {% csrf_token %}
-      <div class="dropdown">
-        <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-gear"></i></button>
-        <ul class="dropdown-menu">
-          <li>
-            <button class="dropdown-item" name="vetis_task" value="update_stock_entries" onclick="return window.confirm('Будут загружены данные с сайта Ветис. Вы уверены?')">Обновить записи журнала</button>
-          </li>
-        </ul>
-      </div>
-    </form>
+    {% if user.is_authenticated %}
+      <form method="POST" action="{% url 'main:vetis_task' %}">
+        {% csrf_token %}
+        <div class="dropdown">
+          <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-gear"></i></button>
+          <ul class="dropdown-menu">
+            <li>
+              <button class="dropdown-item" name="vetis_task" value="update_stock_entries" onclick="return window.confirm('Будут загружены данные с сайта Ветис. Вы уверены?')">Обновить записи журнала</button>
+            </li>
+          </ul>
+        </div>
+      </form>
+    {% endif %}
   </div>
 
   <form method="POST" name="search_form" class="mb-3">
     {% csrf_token %}
     <div class="row align-items-end">
-      {% bootstrap_field form.product wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.status wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
       {% bootstrap_field form.search_query wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
       {% bootstrap_field form.has_quantity wrapper_class='col-lg-1 mb-3 mb-lg-0' %}
       <div class="col-lg-3 d-flex justify-content-end">
@@ -43,6 +45,7 @@
         {% bootstrap_field form.date_produced_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
         {% bootstrap_field form.date_created_begin wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
         {% bootstrap_field form.date_created_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.product wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
       </div>
     </div>
   </form>

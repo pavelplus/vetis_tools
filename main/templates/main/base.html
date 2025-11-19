@@ -42,20 +42,24 @@
                   </li>
                 </ul>
               </li>
-              <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">API</a>
-                <ul class="dropdown-menu">
-                  <li>
-                    <a class="dropdown-item" href="{% url 'main:vetis_task' %}">Задачи</a>
+              {% if user.is_authenticated %}
+                {% if user.is_superuser %}
+                  <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">API</a>
+                    <ul class="dropdown-menu">
+                      <li>
+                        <a class="dropdown-item" href="{% url 'main:vetis_task' %}">Задачи</a>
+                      </li>
+                      <li>
+                        <a class="dropdown-item" href="{% url 'vetis_api:api_requests_history' %}">История запросов</a>
+                      </li>
+                      <li>
+                        <a class="dropdown-item" href="{% url 'main:statistics' %}">Статистика</a>
+                      </li>
+                    </ul>
                   </li>
-                  <li>
-                    <a class="dropdown-item" href="{% url 'vetis_api:api_requests_history' %}">История запросов</a>
-                  </li>
-                  <li>
-                    <a class="dropdown-item" href="{% url 'main:statistics' %}">Статистика</a>
-                  </li>
-                </ul>
-              </li>
+                {% endif %}
+              {% endif %}
             </ul>
             <ul class="navbar-nav mb-2 mb-lg-0">
               {% if user.is_authenticated %}

@@ -24,13 +24,13 @@
     </form>
   </div>
 
-  {% comment %} <form method="POST" name="search_form" class="mb-3">
+  <form method="POST" name="search_form" class="mb-3">
     {% csrf_token %}
     <div class="row align-items-end">
-      {% bootstrap_field form.product wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
-      {% bootstrap_field form.search_query wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
-      {% bootstrap_field form.has_quantity wrapper_class='col-lg-1 mb-3 mb-lg-0' %}
-      <div class="col-lg-3 d-flex justify-content-end">
+      {% bootstrap_field form.issue_date_begin wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.issue_date_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.item_name_search_query wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
+      <div class="col-lg-4 d-flex justify-content-end">
         <button class="btn btn-primary" name="search" type="submit">Применить</button>
         <a class="ms-1 btn {{ btn_filters_class }}" data-bs-toggle="collapse" href="#collapseFilter" title="Еще фильтры">
           <i class="bi bi-funnel"></i>
@@ -39,13 +39,12 @@
     </div>
     <div class="collapse" id="collapseFilter">
       <div class="row mt-3">
-        {% bootstrap_field form.date_produced_begin wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
-        {% bootstrap_field form.date_produced_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
-        {% bootstrap_field form.date_created_begin wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
-        {% bootstrap_field form.date_created_end wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.vetd_type wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.consignor_search_query wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
+        {% bootstrap_field form.consignee_search_query wrapper_class='col-lg-4 mb-3 mb-lg-0' %}
       </div>
     </div>
-  </form> {% endcomment %}
+  </form>
   {% for vetd in vet_documents %}
     {% if forloop.first %}
       <p class="my-0 text-secondary border-bottom"><small>Показано записей: {{ vet_documents.count }}</small></p>
@@ -61,17 +60,17 @@
         <tbody>
     {% endif %}
         <tr>
-          <td>
+          <td class="py-0">
             <div>{{ vetd.issue_date|date:'d.m.Y' }}</div>
-            <div>{{ vetd.get_vetd_type_display }} <small class="text-secondary">{{ vetd.get_vetd_status_display }}</small></div>
+            <div><a href="{% url 'main:vet_document_detail' vetd.id %}">{{ vetd.get_vetd_type_display }}</a> <small class="text-secondary">{{ vetd.get_vetd_status_display }}</small></div>
           </td>
-          <td>
+          <td class="py-0">
             {% if vetd.consignor_ent_name %}<div style="font-size: 75%;" class="text-secondary"><i class="bi bi-arrow-left"></i> {{ vetd.consignor_ent_name|truncatechars:100 }}</div>{% endif %}
             {% if vetd.consignee_ent_name %}<div style="font-size: 75%;" class="text-secondary"><i class="bi bi-arrow-right"></i> {{ vetd.consignee_ent_name|truncatechars:100 }}</div>{% endif %}
             {% if vetd.producer_ent_name %}<div style="font-size: 75%;" class="text-secondary"><i class="bi bi-hammer"></i> {{ vetd.producer_ent_name|truncatechars:100 }}</div>{% endif %}
           </td>
-          <td>{{ vetd.product_item_name }}</td>
-          <td>{{ vetd.volume.normalize }}&nbsp;{{ vetd.unit.name }}</td>
+          <td class="py-0">{{ vetd.product_item_name }}</td>
+          <td class="py-0">{{ vetd.volume.normalize }}&nbsp;{{ vetd.unit.name }}</td>
         </tr>
     {% if forloop.last %}
         </tbody>

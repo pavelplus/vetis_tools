@@ -10,6 +10,7 @@ def api_requests_history(request):
     requests_history = ApiRequestsHistoryRecord.objects.all()[:20]
     context = {
         'requests_history': requests_history,
+        'history_records_count': ApiRequestsHistoryRecord.objects.count()
     }
     return TemplateResponse(request, 'vetis_api/api_requests_history.html', context)
 

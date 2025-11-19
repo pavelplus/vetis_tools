@@ -1,0 +1,131 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Ветеринарный документ{% endblock %}
+
+{% block content %}
+  <h3 class="mt-3">Ветеринарный документ</h3>
+  
+  <table class="table">
+    <tbody>
+      <tr>
+        <th scope="row">Дата оформления</th>
+        <td>{{ vet_document.issue_date }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Форма</th>
+        <td>{{ vet_document.get_vetd_form_display }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Тип, статус</th>
+        <td>{{ vet_document.get_vetd_type_display }} <span class="badge text-bg-info">{{ vet_document.get_vetd_status_display }}</span></td>
+      </tr>
+      {% if vet_document.consignor_be_name or vet_document.consignor_ent_name %}
+        <tr>
+          <th scope="row">Отправитель</th>
+          <td>
+            {% if vet_document.consignor_be_name %}<div>{{ vet_document.consignor_be_name }} </div>{% endif %}
+            {% if vet_document.consignor_ent_name %}<div>{{ vet_document.consignor_ent_name }}</div>{% endif %}
+          </td>
+        </tr>  
+      {% endif %}
+      {% if vet_document.consignee_be_name or vet_document.consignee_ent_name %}
+        <tr>
+          <th scope="row">Получатель</th>
+          <td>
+            {% if vet_document.consignee_be_name %}<div>{{ vet_document.consignee_be_name }}</div>{% endif %}
+            {% if vet_document.consignee_ent_name %}<div>{{ vet_document.consignee_ent_name }}</div>{% endif %}
+          </td>
+        </tr>  
+      {% endif %}
+      {% if vet_document.producer_be_name or vet_document.producer_ent_name %}
+        <tr>
+          <th scope="row">Производитель</th>
+          <td>
+            {% if vet_document.producer_be_name %}<div>{{ vet_document.producer_be_name }}</div>{% endif %}
+            {% if vet_document.producer_ent_name %}<div>{{ vet_document.producer_ent_name }}</div>{% endif %}
+          </td>
+        </tr>  
+      {% endif %}
+      <tr>
+        <th scope="row">Продукция</th>
+        <td>
+          <p class="text-secondary my-0">
+            {{ vet_document.get_product_type_display }}
+            <i class="bi bi-caret-right-fill"></i> {{ vet_document.product }}
+            <i class="bi bi-caret-right-fill"></i> {{ vet_document.subproduct }}
+          </p>
+          <p class="fw-bold my-0">
+            {{ vet_document.product_item_name }}
+            {% if vet_document.product_item %}
+              <a href="{% url 'main:product_item_detail' vet_document.product_item.id %}" title="Карточка наименования продукции"><i class="bi bi-eye"></i></a>
+            {% endif %}
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Объем</th>
+        <td>
+          <span class="fw-bold">{{ vet_document.volume.normalize }}&nbsp;{{ vet_document.unit }}</span>
+          {% if vet_document.main.is_populated %}<span class="text-secondary"> / {{ vet_document.main.initial_volume.normalize }}</span>{% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Произведено</th>
+        <td>
+          {{ vet_document.date_produced_display }}
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Срок годности</th>
+        <td>
+          {{ vet_document.date_expiry_display }}
+          {% if vet_document.is_perishable %}<span class="badge text-bg-warning">СКОРОПОРТ</span>{% endif %}
+        </td>
+      </tr>
+      {% if vet_document.origin_country %}
+        <tr>
+          <th scope="row">Страна</th>
+          <td>{{ vet_document.origin_country }}</td>
+        </tr>
+      {% endif %}
+      {% if vet_document.producer_name %}
+        <tr>
+          <th scope="row">Производитель</th>
+          <td>
+            {% if vet_document.producer %}<i class="bi bi-house text-info"></i>{% endif %}
+            {{ vet_document.producer_name }}
+          </td>
+        </tr>
+      {% endif %}
+      <tr>
+        <th scope="row">Просмотр</th>
+        <td>
+          <i class="bi bi-info-circle"></i>
+          <a target="_blank" href="https://mercury.vetrf.ru/pub/operatorui?_action=findVetDocumentFormByUuid&uuid={{ vet_document.uuid }}">Информация на сайте Ветис</a>
+          <i class="bi bi-printer ms-2"></i>
+          <a target="_blank" href="https://mercury.vetrf.ru/pub/operatorui?_action=printVetDocumentByUuid&uuid={{ vet_document.uuid }}">Печатная форма</a>
+        </td>
+      </tr>
+      <tr>
+      {% if vet_document.status_change %}
+        <tr style="font-size: 75%">
+          <th scope="row" class="text-secondary">События</th>
+          <td class="text-secondary">
+              {% for status in vet_document.status_change_list %}
+                <p class="mb-0"> {{ status }}</p>
+              {% endfor %}
+          </td>
+        </tr>
+      {% endif %}
+      <tr style="font-size: 75%">
+        <th scope="row" class="text-secondary">Служебные</th>
+        <td class="text-secondary">
+          UUID: {{ vet_document.uuid }} <i class="bi bi-dash"></i>
+          ID: {{ vet_document.id }} <i class="bi bi-dash"></i>
+          Обновлен: {{ vet_document.date_updated }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+{% endblock %}

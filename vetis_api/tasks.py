@@ -116,6 +116,9 @@ def send_soap_request(soap_request: AbstractRequest, credentials: VetisCredentia
     record.response_status_code = response.status_code
     record.response_body = response.text
     record.save()
+
+    # Cleanup history table
+    ApiRequestsHistoryRecord.objects.filter(datetime__lt=(datetime.now(tz=TZ_MOSCOW)-timedelta(days=7))).delete()
     
     return response
 

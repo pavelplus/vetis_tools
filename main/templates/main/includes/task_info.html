@@ -1,10 +1,14 @@
 <div class="alert alert-info mt-3">
-  {% if task_ready %}
-    <i class="bi bi-check-lg"></i>
-  {% else %}
-    <i class="bi bi-hourglass-split"></i>
-  {% endif %}
-  Статус задачи {{ task_id }}: {{ task_result.state }}{{ tick }}
+  <div>
+    {% if task_ready %}
+      <i class="bi bi-check-lg"></i>
+    {% else %}
+      <i class="bi bi-hourglass-split"></i>
+    {% endif %}
+    Статус задачи: {{ task_result.state }}{{ tick }}
+  </div>
+  <div style="font-size: 75%;" class="text-secondary">{{ task_id }}</div>
+
 </div>
 
 {% if task_result.result %}

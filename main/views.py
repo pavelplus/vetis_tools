@@ -1,7 +1,8 @@
 import json
 
 from celery.result import AsyncResult
-from datetime import datetime, time
+from datetime import datetime, date, time
+from django_celery_results.models import TaskResult
 
 from django.db.models import Q
 from django.contrib import messages
@@ -24,7 +25,7 @@ from vetis_api.tasks import (
     update_vet_documents_task
     )
 from .util import build_url
-from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm, StockEntryCommentForm
+from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm, StockEntryCommentForm, VetDocumentFilterForm
 
 
 def index(request):
@@ -171,11 +172,12 @@ def stock_entries(request):
         form = StockEntriesFilterForm(request.POST)
         if form.is_valid():
             stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True).select_related('main').order_by('date_expiry', '-entry_number')
-            if form.cleaned_data['product']:
-                stock_entries = stock_entries.filter(product= form.cleaned_data['product'])
+            if form.cleaned_data['status']:
+                stock_entries = stock_entries.filter(main__initial_status=form.cleaned_data['status'])
             if form.cleaned_data['search_query']:
-                for query in form.cleaned_data['search_query'].split(' '):
-                    if query[0] == '-':
+                print(f'...{form.cleaned_data['search_query']}...')
+                for query in form.cleaned_data['search_query'].split():
+                    if query[0] == '-' and len(query) > 1:
                         stock_entries = stock_entries.exclude(product_item_name__icontains=query[1:])
                     else:
                         stock_entries = stock_entries.filter(product_item_name__icontains=query)
@@ -197,10 +199,11 @@ def stock_entries(request):
                 date_created_end = datetime.combine(form.cleaned_data['date_created_end'], time(hour=23, minute=59, second=59), tzinfo=TZ_MOSCOW)
                 stock_entries = stock_entries.filter(date_created__lte=date_created_end)
                 has_collapsed_filters = True
+            if form.cleaned_data['product']:
+                stock_entries = stock_entries.filter(product= form.cleaned_data['product'])
+                has_collapsed_filters = True
 
             stock_entries = stock_entries[:1000]
-
-            # prefetch related comments
 
     else:
         form = StockEntriesFilterForm()
@@ -227,6 +230,10 @@ def stock_entry_detail(request, id):
     # comment = StockEntryComment.objects.filter(stock_entry_guid=stock_entry.guid).first()
 
     if request.method == 'POST':
+        if not request.user.is_authenticated:
+            messages.add_message(request, messages.ERROR, 'Пользователю запрещено обновление комментариев.')
+            return redirect(reverse('main:stock_entry_detail', kwargs={'id': stock_entry.id}))
+
         comment_form = StockEntryCommentForm(request.POST)
         if comment_form.is_valid():
             if comment_form.cleaned_data['text']:
@@ -277,15 +284,73 @@ def vet_documents(request):
 
     has_collapsed_filters = False
 
-    vet_documents = VetDocument.objects.filter(ent_filter).order_by('-issue_date', '-date_updated')[:200]
+    vet_documents = VetDocument.objects.none()
 
+    if request.method == 'POST':
+        form = VetDocumentFilterForm(request.POST)
+        vet_documents = VetDocument.objects.filter(ent_filter).order_by('-issue_date', '-date_updated')
+        if form.is_valid():
+            if form.cleaned_data['issue_date_begin']:
+                vet_documents = vet_documents.filter(issue_date__gte=form.cleaned_data['issue_date_begin'])
+            if form.cleaned_data['issue_date_end']:
+                vet_documents = vet_documents.filter(issue_date__gte=form.cleaned_data['issue_date_end'])
+            if form.cleaned_data['item_name_search_query']:
+                for query in form.cleaned_data['item_name_search_query'].split():
+                    if query[0] == '-' and len(query) > 1:
+                        vet_documents = vet_documents.exclude(product_item_name__icontains=query[1:])
+                    else:
+                        vet_documents = vet_documents.filter(product_item_name__icontains=query)
+            if form.cleaned_data['vetd_type']:
+                vet_documents = vet_documents.filter(vetd_type=form.cleaned_data['vetd_type'])
+                has_collapsed_filters = True
+            if form.cleaned_data['consignor_search_query']:
+                entity_search_filter = (
+                    Q(consignor_be_name__icontains=form.cleaned_data['consignor_search_query'])
+                    | Q(consignor_ent_name__icontains=form.cleaned_data['consignor_search_query'])
+                )
+                vet_documents = vet_documents.filter(entity_search_filter)
+                has_collapsed_filters = True
+            if form.cleaned_data['consignee_search_query']:
+                entity_search_filter = (
+                    Q(consignee_be_name__icontains=form.cleaned_data['consignee_search_query'])
+                    | Q(consignee_ent_name__icontains=form.cleaned_data['consignee_search_query'])
+                )
+                vet_documents = vet_documents.filter(entity_search_filter)
+                has_collapsed_filters = True
+
+            vet_documents = vet_documents[:1000]
+
+    else:
+        form = VetDocumentFilterForm(initial={'issue_date_begin': date.today().isoformat()})
 
     context = {
+        'form': form,
+        'btn_filters_class': 'btn-warning' if has_collapsed_filters else 'btn-secondary',
         'vet_documents': vet_documents,
         'vetd_last_updated': vetd_last_updated,
         'vetd_records_last_updated': vetd_records_last_updated,
     }
     return TemplateResponse(request, 'main/vet_documents.html', context=context)
+
+
+def vet_document_by_uuid(request, uuid):
+    vet_document = VetDocument.objects.filter(uuid=uuid).first()
+
+    if vet_document:
+        return vet_document_detail(request, vet_document.id)
+    
+    messages.add_message(request, messages.ERROR, f'В базу не загружен ветеринарный документ с uuid={uuid}')
+    return redirect('main:vet_documents')
+
+
+def vet_document_detail(request, id):
+
+    vet_document = get_object_or_404(VetDocument, id=id)
+
+    context = {
+        'vet_document': vet_document,
+    }
+    return TemplateResponse(request, 'main/vet_document_detail.html', context=context)
 
 
 # htmx partial render
@@ -401,6 +466,7 @@ def statistics(request):
         'Версии записей журнала': StockEntry.objects.count(),
         'Ветеринарные документы': VetDocument.objects.count(),
         'История запросов Ветис': ApiRequestsHistoryRecord.objects.count(),
+        'Результаты задач celery': TaskResult.objects.count(),
     }
 
     context = {
