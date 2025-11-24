@@ -7,7 +7,7 @@ from django_celery_results.models import TaskResult
 from django.db.models import Q
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.http import Http404, FileResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -25,7 +25,8 @@ from vetis_api.tasks import (
     update_vet_documents_task
     )
 from .util import build_url
-from .forms import WorkspaceSelectionForm, ProductItemsFilterForm, StockEntriesFilterForm, StockEntryCommentForm, VetDocumentFilterForm
+from .forms import *
+from .xls import xls_tools
 
 
 def index(request):
@@ -36,8 +37,20 @@ def index(request):
         date_expiry__lte=(datetime.now(tz=TZ_MOSCOW)+timedelta(days=30))
         ).select_related('main').order_by('date_expiry')
     
+    not_populated_main_count = StockEntryMain.objects.filter(is_populated=False).count()
+
+    no_assort_group_count = ProductItem.objects.filter(assort_group__isnull=True).count()
+
+    last_updated_stock_entries = Enterprise.objects.filter(
+        stock_entries_last_updated__isnull=False,
+        stock_entries_last_updated__lte=(datetime.now(tz=TZ_MOSCOW)-timedelta(days=1))
+    ).order_by('stock_entries_last_updated')
+
     context = {
-        'stock_entries_expiry': stock_entries_expiry
+        'stock_entries_expiry': stock_entries_expiry,
+        'not_populated_main_count': not_populated_main_count,
+        'no_assort_group_count': no_assort_group_count,
+        'last_updated_stock_entries': last_updated_stock_entries,
     }
 
     return TemplateResponse(request, 'main/index.html', context)
@@ -108,26 +121,28 @@ def product_items(request):
     product_items = ProductItem.objects.none()
     # product_items = ProductItem.objects.filter(is_active=True).select_related('product', 'subproduct').order_by('product_type', 'product__name', 'subproduct__name', 'name')
     show_business_entity = True
-    by_groups = False
+    by_levels = False
 
     if request.method == 'POST':
         form = ProductItemsFilterForm(request.POST)
         if form.is_valid():
-            by_groups = form.cleaned_data['by_groups']
-            order_by_clause = ['product_type', 'product__name', 'subproduct__name', 'name'] if by_groups else ['name']
+            by_levels = form.cleaned_data['by_levels']
+            order_by_clause = ['product_type', 'product__name', 'subproduct__name', 'name'] if by_levels else ['name']
             product_items = ProductItem.objects.select_related('product', 'subproduct').order_by(*order_by_clause)
             if form.cleaned_data['business_entity']:
                 product_items = product_items.filter(producer=form.cleaned_data['business_entity'])
                 show_business_entity = False
             if form.cleaned_data['search_query']:
                 product_items = product_items.filter(name__icontains=form.cleaned_data['search_query'])
+            if form.cleaned_data['no_assort_group']:
+                product_items = product_items.filter(assort_group__isnull=True)
 
     else:
         form = ProductItemsFilterForm()
 
     context = {
         'form': form,
-        'by_groups': by_groups,
+        'by_levels': by_levels,
         'show_business_entity': show_business_entity,
         'product_items': product_items,
     }
@@ -137,8 +152,30 @@ def product_items(request):
 def product_item_detail(request, id):
     product_item = get_object_or_404(ProductItem, id=id)
 
+    if request.method == 'POST':
+        if not request.user.is_authenticated:
+            messages.add_message(request, messages.ERROR, 'Пользователю запрещено менять ассортиментную группу.')
+            return redirect(reverse('main:product_item_detail', kwargs={'id': product_item.id}))
+
+        assort_form = ProductItemAssortGroupForm(request.POST)
+        if assort_form.is_valid():
+            if assort_form.cleaned_data['assort_group']:
+                assort_group = get_object_or_404(AssortGroup, id=assort_form.cleaned_data['assort_group'].id)
+                product_item.assort_group = assort_group
+                messages.add_message(request, messages.INFO, 'Ассортиментная группа изменена.')
+            else:
+                product_item.assort_group = None
+                messages.add_message(request, messages.WARNING, 'Ассортиментная группа удалена.')
+            product_item.save()
+            return redirect(reverse('main:product_item_detail', kwargs={'id': product_item.id}))
+
+
+    else:
+        assort_form = ProductItemAssortGroupForm(initial={'assort_group': product_item.assort_group})
+
     context = {
-        'product_item': product_item
+        'product_item': product_item,
+        'assort_form': assort_form,
     }
 
     return TemplateResponse(request, 'main/product_item_detail.html', context=context)
@@ -260,6 +297,25 @@ def stock_entry_detail(request, id):
     return TemplateResponse(request, 'main/stock_entry_detail.html', context=context)
 
 
+def stock_entries_to_xls(request):
+
+    ent_id = request.session.get('enterprise', 0)
+
+    if not ent_id:
+        messages.add_message(request, messages.WARNING, 'Не выбрано активное предприятие!')
+        return redirect('main:select_workspace')
+    
+    enterprise = get_object_or_404(Enterprise, id=ent_id)
+
+    filepath = xls_tools.stock_entries_to_xls(enterprise)
+
+    if not filepath:
+        messages.add_message(request, messages.ERROR, 'Не удалось сформировать файл!')
+        return redirect('main:stock_entries')
+
+    return FileResponse(open(filepath, 'rb'))
+
+
 def vet_documents(request):
     ent_id = request.session.get('enterprise', 0)
 
@@ -359,8 +415,6 @@ def task_info(request):
     task_id = request.GET.get('task_id')
     task_result = AsyncResult(task_id)
 
-    print(f'typeof tast_result.result: {type(task_result.result)}')
-    
     context = {}
     if task_result:
         context = {

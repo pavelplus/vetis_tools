@@ -175,21 +175,34 @@ class SubProduct(models.Model):
         ordering = ['name']
 
 
+class AssortGroup(models.Model):
+    name = models.CharField(max_length=30, verbose_name='название')
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = 'ассортиментная группа'
+        verbose_name_plural = 'ассортиментные группы'
+        ordering = ['name']
+
+
 class ProductItem(models.Model):
-    guid = models.UUIDField(unique=True, db_index=True)
-    uuid = models.UUIDField(unique=True)
+    guid = models.UUIDField(null=True, blank=True, unique=True, db_index=True)
+    uuid = models.UUIDField(null=True, blank=True, unique=True)
     is_active = models.BooleanField(default=True, verbose_name='активно')
     name = models.CharField(max_length=255, verbose_name='название')
     gtin = models.CharField(blank=True, max_length=20, verbose_name='GTIN')
     product_type = models.IntegerField(choices=PRODUCT_TYPES, verbose_name='тип продукции')
     product_guid = models.UUIDField(verbose_name='продукция (GUID)')
-    product = models.ForeignKey(Product, null=True, verbose_name='продукция', on_delete=models.PROTECT)
+    product = models.ForeignKey(Product, verbose_name='продукция', on_delete=models.PROTECT)
     subproduct_guid = models.UUIDField(verbose_name='вид продукции (GUID)')
-    subproduct = models.ForeignKey(SubProduct, null=True, verbose_name='вид продукции', on_delete=models.PROTECT)
+    subproduct = models.ForeignKey(SubProduct, verbose_name='вид продукции', on_delete=models.PROTECT)
     is_gost = models.BooleanField(default=False, verbose_name='соответствует ГОСТ')
     gost = models.CharField(blank=True, max_length=255, verbose_name='ГОСТ')
     producer_guid = models.UUIDField(blank=True, null=True, verbose_name='производитель (GUID)')
-    producer = models.ForeignKey(BusinessEntity, null=True, verbose_name='производитель', on_delete=models.PROTECT)
+    producer = models.ForeignKey(BusinessEntity, blank=True, null=True, verbose_name='производитель', on_delete=models.PROTECT)
+    assort_group = models.ForeignKey(AssortGroup, blank=True, null=True, verbose_name='ассортиментная группа', on_delete=models.PROTECT)
 
     def __str__(self):
         return self.name

@@ -34,9 +34,15 @@ class SubProductAdmin(admin.ModelAdmin):
     list_display = ['name', 'product']
 
 
+@admin.register(AssortGroup)
+class AssortGroupAdmin(admin.ModelAdmin):
+    list_display = ['name']
+
+
 @admin.register(ProductItem)
 class ProductItemAdmin(admin.ModelAdmin):
-    list_display = ['name', 'producer']
+    list_display = ['name', 'assort_group', 'producer']
+    search_fields = ['name']
 
 
 @admin.register(Unit)

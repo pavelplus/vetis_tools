@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 
-from .settings import NAMESPACES
+from .build_xml import NAMESPACES
 
 
 my_xml = '''<?xml version="1.0" encoding="UTF-8"?>

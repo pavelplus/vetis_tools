@@ -1,7 +1,7 @@
 from django import forms
 from django.urls import reverse_lazy
 
-from vetis_api.models import BusinessEntity, Enterprise, Product, STOCK_ENTRY_STATUS_CHOICES, VetDocument
+from vetis_api.models import BusinessEntity, Enterprise, Product, STOCK_ENTRY_STATUS_CHOICES, VetDocument, AssortGroup
 
 
 class WorkspaceSelectionForm(forms.Form):
@@ -17,7 +17,12 @@ class WorkspaceSelectionForm(forms.Form):
 class ProductItemsFilterForm(forms.Form):
     business_entity = forms.ModelChoiceField(queryset=BusinessEntity.objects.all(), label='Владелец', required=False)
     search_query = forms.CharField(max_length=100, label='Название', required=False, widget=forms.widgets.TextInput(attrs={'autocomplete': 'off'}))
-    by_groups = forms.BooleanField(label='По группам', required=False)
+    by_levels = forms.BooleanField(label='По уровням', required=False)
+    no_assort_group = forms.BooleanField(label='Без группы', required=False)
+
+
+class ProductItemAssortGroupForm(forms.Form):
+    assort_group = forms.ModelChoiceField(queryset=AssortGroup.objects.all(), label='Ассортиментная группа', required=False)
 
 
 class StockEntriesFilterForm(forms.Form):

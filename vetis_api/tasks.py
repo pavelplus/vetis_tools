@@ -12,7 +12,6 @@ from django.db import transaction
 
 from .models import *
 from .xml.build_xml import *
-#from .xml.settings import NAMESPACES
 
 
 logger = logging.getLogger('vetis_tools')
@@ -151,7 +150,7 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
 
     status = '---'
 
-    for try_num in range(4):
+    for try_num in range(5):
         sleep(3 + try_num*10)
 
         logger.debug(f'Получение ответа. Попытка {try_num + 1}...')
@@ -201,28 +200,12 @@ def maintenance_task(this_task, credentials_id: int):
     except ObjectDoesNotExist:
         raise RuntimeError('Не обнаружены параметры подключения')
     
-
-    vetds = VetDocument.objects.all()
-
-    logger.debug(f'Обновляем ветеринарки (названия). Всего {vetds.count()}')
-
-    for vetd in vetds:
-        if vetd.consignor_be_guid:
-            vetd.consignor_be_name = str(get_or_load_business_entity_info_by_guid(credentials, vetd.consignor_be_guid))
-        if vetd.consignor_ent_guid:
-            vetd.consignor_ent_name = str(get_or_load_enterprise_info_by_guid(credentials, vetd.consignor_ent_guid))
-        
-        if vetd.consignee_be_guid:
-            vetd.consignee_be_name = str(get_or_load_business_entity_info_by_guid(credentials, vetd.consignee_be_guid))
-        if vetd.consignee_ent_guid:
-            vetd.consignee_ent_name = str(get_or_load_enterprise_info_by_guid(credentials, vetd.consignee_ent_guid))
-
-        if vetd.producer_be_guid:
-            vetd.producer_be_name = str(get_or_load_business_entity_info_by_guid(credentials, vetd.producer_be_guid))
-        if vetd.producer_ent_guid:
-            vetd.producer_ent_name = str(get_or_load_enterprise_info_by_guid(credentials, vetd.producer_ent_guid))
-        
-        vetd.save()
+    for item in ITEMS:
+        item_id = item[0]
+        group_name = item[1]
+        print(f'{item_id}, {group_name}')
+        assort_group = AssortGroup.objects.get(name=group_name)
+        ProductItem.objects.filter(id=item_id).update(assort_group=assort_group)
 
     return 'Задача успешно завершена'
 
@@ -499,6 +482,30 @@ def get_or_load_product_item_by_guid(credentials: VetisCredentials, product_item
     product_item_xml = result_xml.find('./soapenv:Body/ws:getProductItemByGuidResponse/dt:productItem', NAMESPACES)
 
     fill_product_item_from_xml(product_item, product_item_xml, credentials)
+
+    return product_item
+
+
+def get_or_create_dummy_product_item(product_item_name: str, subproduct: SubProduct) -> ProductItem:
+
+    product_item = ProductItem.objects.filter(subproduct=subproduct, name=product_item_name).first()
+
+    if product_item is None:
+    
+        product_item = ProductItem()
+
+        product_item.is_active = True
+        product_item.name = product_item_name
+
+        product_item.product_type = subproduct.product.product_type
+        product_item.product_guid = subproduct.product.guid
+        product_item.product = subproduct.product
+        product_item.subproduct_guid = subproduct.guid
+        product_item.subproduct = subproduct
+
+        product_item.is_gost = False
+
+        product_item.save()
 
     return product_item
 
@@ -872,10 +879,13 @@ def fill_vet_document_from_xml(vet_document: VetDocument, vet_document_xml: ET.E
     # product_item_name
     # product_item
 
-    vet_document.product_item_guid = get_xml_text(batch_xml, 'vd:productItem/bs:guid', default=None)
     vet_document.product_item_name = get_xml_text(batch_xml, 'vd:productItem/dt:name')
-    if vet_document.product_item_guid:
-        vet_document.product_item = get_or_load_product_item_by_guid(credentials, vet_document.product_item_guid)
+    vet_document_guid_xml = batch_xml.find('vd:productItem/bs:guid', NAMESPACES)
+    if vet_document_guid_xml is not None:
+        vet_document.product_item_guid = vet_document_guid_xml.text
+        vet_document.product_item = get_or_load_product_item_by_guid(credentials=credentials, product_item_guid=vet_document.product_item_guid)
+    else:
+        vet_document.product_item = get_or_create_dummy_product_item(vet_document.product_item_name, vet_document.subproduct)
 
     # volume
     # unit
@@ -1066,6 +1076,8 @@ def fill_stock_entry_from_xml(stock_entry: StockEntry, enterprise: Enterprise, s
     if product_item_guid_xml is not None:
         stock_entry.product_item_guid = product_item_guid_xml.text
         stock_entry.product_item = get_or_load_product_item_by_guid(credentials=credentials, product_item_guid=stock_entry.product_item_guid)
+    else:
+        stock_entry.product_item = get_or_create_dummy_product_item(stock_entry.product_item_name, stock_entry.subproduct)
 
     # volume
     # unit

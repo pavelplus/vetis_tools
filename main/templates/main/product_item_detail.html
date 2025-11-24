@@ -3,6 +3,7 @@
 {% block title %}Наименование продукции{% endblock %}
 
 {% block content %}
+
   <h3 class="mt-3">Карточка элемента справочника (наименование продукции)</h3>
   
   <div class="card mt-3">
@@ -24,9 +25,24 @@
           <span class="badge text-bg-secondary">ГОСТ</span> {{ product_item.gost }}
         </li>
       {% endif %}
+      <li class="list-group-item">
+        {% load django_bootstrap5 %}
+        <form class="form" method="POST">
+          <div class="d-flex align-items-center">
+            {% csrf_token %}
+            {% bootstrap_label 'Ассортиментная группа' label_for='assort_group' label_class='me-0' %}
+            {% bootstrap_field assort_form.assort_group show_label='skip' wrapper_class='ms-2' %}
+            <button class="btn btn-primary ms-2" name="save_assort_group" type="submit">Сохранить</button>
+          </div>
+        </form> 
+      </li>
     </ul>
     <div class="card-footer text-body-secondary">
-      <small>GUID: {{ product_item.guid }}<br />UUID: {{ product_item.uuid }}</small>
+      {% if product_item.guid %}
+        <small>GUID: {{ product_item.guid }}<br />UUID: {{ product_item.uuid }}</small>
+      {% else %}
+        <span class="badge text-bg-warning">БЕЗ GUID</span>
+      {% endif %}
     </div>
   </div>
 {% endblock %}

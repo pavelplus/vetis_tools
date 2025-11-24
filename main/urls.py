@@ -13,6 +13,7 @@ urlpatterns = [
     path('product-items/<int:id>', views.product_item_detail, name='product_item_detail'),
     path('stock/', views.stock_entries, name='stock_entries'),
     path('stock/<int:id>', views.stock_entry_detail, name='stock_entry_detail'),
+    path('stock-download', views.stock_entries_to_xls, name='stock_entries_to_xls'),
     path('vetd/', views.vet_documents, name='vet_documents'),
     path('vetd/<int:id>', views.vet_document_detail, name='vet_document_detail'),
     path('vetd-uuid/<str:uuid>', views.vet_document_by_uuid, name='vet_document_by_uuid'),
