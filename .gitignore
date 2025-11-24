@@ -1,5 +1,7 @@
 .*
 !/.gitignore
+!/.env.example
 __pycache__/
 /db.sqlite3
 /main/xls/generated/*
+/log/*
