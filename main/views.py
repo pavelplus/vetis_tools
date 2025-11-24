@@ -29,6 +29,16 @@ from .forms import *
 from .xls import xls_tools
 
 
+def warning_messages(request):
+    not_populated_main_count = StockEntryMain.objects.filter(is_populated=False).count()
+    if not_populated_main_count:
+        messages.add_message(request, messages.WARNING, f'Имеются не заполненные головные записи журнала ({not_populated_main_count})!')
+
+    no_assort_group_count = ProductItem.objects.filter(assort_group__isnull=True).count()
+    if no_assort_group_count:
+        messages.add_message(request, messages.WARNING, f'Имеются наименования продукции без указанной ассортиментной группы ({no_assort_group_count})!')
+
+
 def index(request):
     stock_entries_expiry = StockEntry.objects.filter(
         is_last=True,
@@ -36,20 +46,16 @@ def index(request):
         volume__gt=0,
         date_expiry__lte=(datetime.now(tz=TZ_MOSCOW)+timedelta(days=30))
         ).select_related('main').order_by('date_expiry')
-    
-    not_populated_main_count = StockEntryMain.objects.filter(is_populated=False).count()
-
-    no_assort_group_count = ProductItem.objects.filter(assort_group__isnull=True).count()
 
     last_updated_stock_entries = Enterprise.objects.filter(
         stock_entries_last_updated__isnull=False,
         stock_entries_last_updated__lte=(datetime.now(tz=TZ_MOSCOW)-timedelta(days=1))
     ).order_by('stock_entries_last_updated')
 
+    warning_messages(request)
+
     context = {
         'stock_entries_expiry': stock_entries_expiry,
-        'not_populated_main_count': not_populated_main_count,
-        'no_assort_group_count': no_assort_group_count,
         'last_updated_stock_entries': last_updated_stock_entries,
     }
 
@@ -245,13 +251,15 @@ def stock_entries(request):
     else:
         form = StockEntriesFilterForm()
 
-    date_to_compare = datetime.now()
+    # date_to_compare = datetime.now()
+
+    warning_messages(request)
 
     context = {
         'form': form,
         'entries_last_updated': entries_last_updated,
         'stock_last_updated': stock_last_updated,
-        'date_to_compare': date_to_compare,
+        # 'date_to_compare': date_to_compare,
         'stock_entries': stock_entries,
         'show_origin_detail': True,
         'btn_filters_class': 'btn-warning' if has_collapsed_filters else 'btn-secondary',

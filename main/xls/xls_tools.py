@@ -9,16 +9,16 @@ from openpyxl.utils import range_boundaries, get_column_letter
 from vetis_api.models import *
 
 
-STORAGE_DIR = 'main/xls'
+STORAGE_DIR = 'main/xls/generated'
 
 
 def stock_entries_to_xls(enterprise: Enterprise) -> str | None:
 
     delete_old_files(STORAGE_DIR)
 
-    stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True).select_related('main', 'product_item', 'unit').order_by('date_expiry', '-entry_number')[:10]
+    stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True, volume__gt=0).select_related('main', 'product_item', 'unit')
 
-    wb = load_workbook(filename=f'{STORAGE_DIR}/stock_template.xlsx')
+    wb = load_workbook(filename=f'main/xls/stock_template.xlsx')
 
     ws = wb['data']
     table = ws.tables['stock_entries']
@@ -71,9 +71,17 @@ def stock_entries_to_xls(enterprise: Enterprise) -> str | None:
         
         current_row_idx += 1
 
-    current_row_idx -= 1
+    last_row_idx = current_row_idx - 1
 
-    table.ref = f'{get_column_letter(col_s)}{row_s}:{get_column_letter(col_e)}{current_row_idx}'
+    ws.delete_rows(first_row_idx) # deleting first sample row
+    last_row_idx -= 1
+
+    table.ref = f'{get_column_letter(col_s)}{row_s}:{get_column_letter(col_e)}{last_row_idx}'
+
+    ws['B1'] = enterprise.stock_entries_last_updated.astimezone(tz=TZ_MOSCOW).replace(tzinfo=None)
+
+    pivot = wb['Сводная']._pivots[0]
+    pivot.cache.refreshOnLoad = True
 
     filename = f'stock_entries_{datetime.now(tz=TZ_MOSCOW).strftime('%y%m%d_%H%M%S')}.xlsx'
 
@@ -94,7 +102,6 @@ def delete_old_files(folder_path: str, hours: int = 1) -> int:
 
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
-        print(file_path)
         
         if os.path.isfile(file_path):
             
