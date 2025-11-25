@@ -150,7 +150,7 @@ def send_2step_soap_request(soap_request: AbstractRequest, credentials: VetisCre
 
     status = '---'
 
-    for try_num in range(5):
+    for try_num in range(6):
         sleep(3 + try_num*10)
 
         logger.debug(f'Получение ответа. Попытка {try_num + 1}...')
