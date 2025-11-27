@@ -49,7 +49,7 @@ def index(request):
 
     last_updated_stock_entries = Enterprise.objects.filter(
         stock_entries_last_updated__isnull=False,
-        stock_entries_last_updated__lte=(datetime.now(tz=TZ_MOSCOW)-timedelta(days=1))
+        stock_entries_last_updated__lte=(datetime.now(tz=TZ_MOSCOW)-timedelta(hours=3))
     ).order_by('stock_entries_last_updated')
 
     warning_messages(request)

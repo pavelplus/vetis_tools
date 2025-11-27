@@ -61,6 +61,7 @@
         <a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:product_item_detail' product_item.id %}">{{ product_item.name }}</a>
         {% if product_item.is_gost %}<span class="badge text-bg-info">{{ product_item.gost }}</span>{% endif %}
         {% if not product_item.guid %}<span class="badge text-bg-warning">БЕЗ GUID</span>{% endif %}
+        {% if not product_item.is_active %}<i class="bi bi-trash3 text-danger-emphasis"></i>{% endif %}
         {% if show_business_entity and product_item.producer %}<span class="text-info">{{ product_item.producer }}</span>{% endif %}
       </div>
     {% empty %}
@@ -87,6 +88,7 @@
               <td class="py-0">
                 <a class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover" href="{% url 'main:product_item_detail' product_item.id %}">{{ product_item.name }}</a>
                 {% if not product_item.guid %}<span class="badge text-bg-warning">БЕЗ GUID</span>{% endif %}
+                {% if not product_item.is_active %}<i class="bi bi-trash3 text-danger-emphasis"></i>{% endif %}
               </td>
               <td class="py-0">{{ product_item.assort_group }}</td>
               <td class="py-0 text-secondary">{{ product_item.get_product_type_display }}</td>
