@@ -50,7 +50,7 @@ def stock_entries_to_xls(enterprise: Enterprise) -> str | None:
             str(stock_entry.enterprise.business_entity),
             str(stock_entry.enterprise),
             str(stock_entry.entry_number),
-            stock_entry.main.date_created.date(),
+            stock_entry.main.date_created.date() if stock_entry.main.date_created else None,
             stock_entry.main.get_initial_status_display(),
             stock_entry.product_item_name,
             str(stock_entry.unit),
@@ -60,7 +60,7 @@ def stock_entries_to_xls(enterprise: Enterprise) -> str | None:
             stock_entry.date_expiry_display,
             stock_entry.date_expiry.astimezone(tz=TZ_MOSCOW).date(),
             stock_entry.main.source_ent_name,
-            stock_entry.product_item.assort_group.name,
+            stock_entry.product_item.assort_group.name if stock_entry.product_item.assort_group else '! НЕ УКАЗАНА',
             stock_entry.get_product_type_display()
         ]
 
