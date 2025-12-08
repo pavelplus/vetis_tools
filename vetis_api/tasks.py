@@ -834,10 +834,10 @@ def fill_vet_document_from_xml(vet_document: VetDocument, vet_document_xml: ET.E
     # producer_ent_guid
     # producer_ent_name
 
-    if vet_document.vetd_type not in ['TRANSPORT', 'PRODUCTIVE']:
+    if vet_document.vetd_type not in ['TRANSPORT', 'RETURNABLE', 'PRODUCTIVE']:
         raise RuntimeError(f'Неизвестный тип ветеринарного документа {vet_document.vetd_type}. uuid={vet_document.uuid}')
     
-    if vet_document.vetd_type == 'TRANSPORT':
+    if vet_document.vetd_type in ['TRANSPORT', 'RETURNABLE']:
         vet_document.consignor_be_guid = get_xml_text(vet_document_xml, 'vd:certifiedConsignment/vd:consignor/dt:businessEntity/bs:guid')
         vet_document.consignor_be_name = str(get_or_load_business_entity_info_by_guid(credentials, vet_document.consignor_be_guid))
         vet_document.consignor_ent_guid = get_xml_text(vet_document_xml, 'vd:certifiedConsignment/vd:consignor/dt:enterprise/bs:guid')
