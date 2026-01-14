@@ -1412,8 +1412,8 @@ def update_stock_entry_main(this_task, stock_entry_main: StockEntryMain, credent
 
             vet_document = get_or_load_vet_document_by_uuid(credentials, first_stock_entry.enterprise, initiator_login, stock_entry_vet_document.uuid)
 
-            if vet_document.vetd_type != 'TRANSPORT':
-                raise RuntimeError(f'Неизвестный тип ветеринарного документа {vet_document.vetd_type}')
+            if vet_document.vetd_type not in ['TRANSPORT', 'RETURNABLE']:
+                raise RuntimeError(f'Неизвестный тип ветеринарного документа при заполнении головных записей: {vet_document.vetd_type}. uuid={vet_document.uuid}')
 
             stock_entry_main.initial_status = first_stock_entry.status
             stock_entry_main.date_created = first_stock_entry.date_created
