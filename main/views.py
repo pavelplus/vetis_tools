@@ -357,7 +357,7 @@ def vet_documents(request):
             if form.cleaned_data['issue_date_begin']:
                 vet_documents = vet_documents.filter(issue_date__gte=form.cleaned_data['issue_date_begin'])
             if form.cleaned_data['issue_date_end']:
-                vet_documents = vet_documents.filter(issue_date__gte=form.cleaned_data['issue_date_end'])
+                vet_documents = vet_documents.filter(issue_date__lte=form.cleaned_data['issue_date_end'])
             if form.cleaned_data['item_name_search_query']:
                 for query in form.cleaned_data['item_name_search_query'].split():
                     if query[0] == '-' and len(query) > 1:
