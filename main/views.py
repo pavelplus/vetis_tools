@@ -45,7 +45,7 @@ def index(request):
         is_active=True,
         volume__gt=0,
         date_expiry__lte=(datetime.now(tz=TZ_MOSCOW)+timedelta(days=30))
-        ).select_related('main').order_by('date_expiry')
+        ).select_related('main').order_by('date_expiry', 'entry_number')
 
     last_updated_stock_entries = Enterprise.objects.filter(
         stock_entries_last_updated__isnull=False,
@@ -214,7 +214,7 @@ def stock_entries(request):
     if request.method == 'POST':
         form = StockEntriesFilterForm(request.POST)
         if form.is_valid():
-            stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True).select_related('main').order_by('date_expiry', '-entry_number')
+            stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True).select_related('main').order_by('date_expiry', 'entry_number')
             if form.cleaned_data['status']:
                 stock_entries = stock_entries.filter(main__initial_status=form.cleaned_data['status'])
             if form.cleaned_data['search_query']:
