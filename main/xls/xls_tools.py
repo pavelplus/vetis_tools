@@ -16,7 +16,7 @@ def stock_entries_to_xls(enterprise: Enterprise) -> str | None:
 
     delete_old_files(STORAGE_DIR)
 
-    stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True, volume__gt=0).select_related('main', 'product_item', 'unit')
+    stock_entries = StockEntry.objects.filter(enterprise=enterprise, is_last=True, is_active=True, volume__gt=0).select_related('main', 'product', 'product_item', 'unit')
 
     wb = load_workbook(filename=f'main/xls/stock_template.xlsx')
 
@@ -61,7 +61,7 @@ def stock_entries_to_xls(enterprise: Enterprise) -> str | None:
             stock_entry.date_expiry.astimezone(tz=TZ_MOSCOW).date(),
             stock_entry.main.source_ent_name,
             stock_entry.product_item.assort_group.name if stock_entry.product_item.assort_group else '! НЕ УКАЗАНА',
-            stock_entry.get_product_type_display()
+            stock_entry.product.name
         ]
 
         ws.append(new_row)
