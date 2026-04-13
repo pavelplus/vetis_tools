@@ -33,10 +33,11 @@
   <form method="POST" name="search_form" class="mb-3">
     {% csrf_token %}
     <div class="row align-items-end">
-      {% bootstrap_field form.business_entity wrapper_class='col-lg-3 mb-3 mb-lg-0' %}
-      {% bootstrap_field form.search_query wrapper_class='col-lg-3 mb-3 mb-lg-0' %}
-      {% bootstrap_field form.by_levels wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.business_entity wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.search_query wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.assort_group wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
       {% bootstrap_field form.no_assort_group wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
+      {% bootstrap_field form.by_levels wrapper_class='col-lg-2 mb-3 mb-lg-0' %}
       <div class="col-lg-2">
         <button class="btn btn-primary" name="search" type="submit">Применить</button>
       </div>
@@ -97,7 +98,7 @@
               {% else %}
               <td class="py-0">-</td>
               {% endif %}
-              <td class="py-0">{{ product_item.producer }}</td>
+              <td class="py-0">{% if product_item.producer %}{{ product_item.producer }}{% else %}-{% endif %}</td>
             </tr>
       {% if forloop.last %}
           </tbody>

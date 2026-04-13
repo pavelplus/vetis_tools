@@ -138,6 +138,8 @@ def product_items(request):
             if form.cleaned_data['business_entity']:
                 product_items = product_items.filter(producer=form.cleaned_data['business_entity'])
                 show_business_entity = False
+            if form.cleaned_data['assort_group']:
+                product_items = product_items.filter(assort_group=form.cleaned_data['assort_group'])
             if form.cleaned_data['search_query']:
                 product_items = product_items.filter(name__icontains=form.cleaned_data['search_query'])
             if form.cleaned_data['no_assort_group']:

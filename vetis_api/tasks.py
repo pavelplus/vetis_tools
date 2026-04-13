@@ -942,7 +942,7 @@ def update_vet_documents(this_task, credentials_id: int, initiator_login: str, e
         raise RuntimeError('Не обнаружены параметры подключения')
 
     if enterprise.vet_documents_last_updated is not None:
-        begin_date = enterprise.vet_documents_last_updated - timedelta(minutes=5) # rolloff slightly just in case
+        begin_date = enterprise.vet_documents_last_updated - timedelta(hours=1) # rolloff just in case
     else:
         begin_date = datetime.now(tz=TZ_MOSCOW) - timedelta(days=2) # well... ok
 
@@ -1195,7 +1195,7 @@ def update_stock_entries(this_task, credentials_id: int, initiator_login: str, e
 
     if enterprise.stock_entries_last_updated is not None:
         update_mode = 'CHANGES'
-        begin_date = enterprise.stock_entries_last_updated - timedelta(minutes=5) # rolloff slightly just in case
+        begin_date = enterprise.stock_entries_last_updated - timedelta(hours=1) # rolloff just in case
     else:
         update_mode = 'INITIAL'
 

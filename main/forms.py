@@ -17,6 +17,7 @@ class WorkspaceSelectionForm(forms.Form):
 class ProductItemsFilterForm(forms.Form):
     business_entity = forms.ModelChoiceField(queryset=BusinessEntity.objects.all(), label='Владелец', required=False)
     search_query = forms.CharField(max_length=100, label='Название', required=False, widget=forms.widgets.TextInput(attrs={'autocomplete': 'off'}))
+    assort_group = forms.ModelChoiceField(queryset=AssortGroup.objects.all(), label='Ассортиментная группа', required=False)
     by_levels = forms.BooleanField(label='По уровням', required=False)
     no_assort_group = forms.BooleanField(label='Без группы', required=False)
 
