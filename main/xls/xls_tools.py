@@ -42,6 +42,7 @@ def stock_entries_to_xls(enterprise: Enterprise) -> str | None:
     # s, Годен до
     # d, Срок годности
     # s, Источник
+    # s, Производитель
     # s, Группа
     # s, Тип продукции
 
@@ -60,6 +61,7 @@ def stock_entries_to_xls(enterprise: Enterprise) -> str | None:
             stock_entry.date_expiry_display,
             stock_entry.date_expiry.astimezone(tz=TZ_MOSCOW).date(),
             stock_entry.main.source_ent_name,
+            stock_entry.producer_name,
             stock_entry.product_item.assort_group.name if stock_entry.product_item.assort_group else '! НЕ УКАЗАНА',
             stock_entry.product.name
         ]
